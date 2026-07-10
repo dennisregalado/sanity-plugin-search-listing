@@ -49,7 +49,7 @@ type StudioFormDocument = {
 }
 
 type SearchListingInputProps = ObjectInputProps & {
-  siteName: string
+  siteName?: string
 }
 
 const SiteNameContext = React.createContext(null as string | null)
@@ -77,7 +77,7 @@ const SEO_STUDIO_FIELD_STYLES = `
 `
 
 export const searchListing = definePlugin<SearchListingPluginOptions | void>((options) => {
-  const siteName = options?.siteName || 'Site'
+  const siteName = options?.siteName
 
   const searchListingType = defineType({
     name: 'seo',
@@ -191,7 +191,7 @@ function SearchListingInput(props: SearchListingInputProps) {
   )
 
   return (
-    <SiteNameContext.Provider value={props.siteName}>
+    <SiteNameContext.Provider value={props.siteName ?? null}>
       <PathPrefixContext.Provider value={pathPrefix}>
         <SlugFallbackContext.Provider value={slugFallback}>
           <style>{SEO_STUDIO_FIELD_STYLES}</style>
