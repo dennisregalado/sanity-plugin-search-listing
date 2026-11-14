@@ -1,6 +1,6 @@
 {
   "name": "sanity-plugin-search-listing",
-  "version": "1.0.7",
+  "version": "1.1.0",
   "description": "A small Sanity Studio SEO search listing field.",
   "keywords": [
     "sanity",
@@ -23,21 +23,25 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./slug": {
+      "import": "./dist/slug.js",
+      "default": "./dist/slug.js"
+    },
     "./package.json": "./package.json"
   },
   "types": "./dist/index.d.ts",
   "browserslist": "extends @sanity/browserslist-config",
   "files": [
-    "dist",
-    "SLUG_FUNCTION_LOGIC.md"
+    "dist"
   ],
   "scripts": {
     "build": "plugin-kit verify-package --silent && pkg-utils build --strict --check --clean",
     "format": "prettier --write --cache --ignore-unknown .",
     "link-watch": "plugin-kit link-watch",
     "lint": "eslint .",
-    "prepublishOnly": "npm run build",
-    "watch": "pkg-utils watch --strict"
+    "prepublishOnly": "npm run lint && npm test && npm run build",
+    "watch": "pkg-utils watch --strict",
+    "test": "vitest run"
   },
   "dependencies": {
     "@sanity/icons": "^3.7.4",
@@ -61,7 +65,8 @@
     "react-dom": "^19.2.7",
     "sanity": "^6.2.0",
     "styled-components": "^6.4.3",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^5.1.0"
   },
   "peerDependencies": {
     "react": "^18 || ^19",

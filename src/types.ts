@@ -16,3 +16,14 @@ export type SearchListingValue = {
     current?: string | null
   } | null
 }
+
+/** Set as `options` on a field of type `seo`. */
+export interface SearchListingFieldOptions {
+  /** The route the document lives under, shown before the URL handle. Defaults to `/`. */
+  pathPrefix?: string
+  /**
+   * Set to `false` for a document with a fixed URL, such as a landing page singleton. The
+   * preview then shows `pathPrefix` as the whole path and the URL handle field is removed.
+   */
+  handle?: boolean
+}

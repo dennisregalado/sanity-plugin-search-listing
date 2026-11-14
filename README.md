@@ -11,7 +11,9 @@ It registers a single `seo` object type with four fields:
 
 The plugin also adds a compact search listing preview above the editable fields. Editors can see the current title, description, URL, image, and common fallbacks without leaving the document form.
 
-When a document does not have an SEO URL, document slug, or storefront slug yet, the URL handle field shows a visual fallback slugified from the document title. This does not save a slug value; it only previews the URL an automatic slug function could create later.
+When a document does not have an SEO URL, document slug, or storefront slug yet, the URL handle field shows a visual fallback slugified from the document's `title`, `name`, or `store.title`. This does not save a slug value; it only previews the URL an automatic slug function would create. See [Persisting the slug](#persisting-the-slug).
+
+A URL handle the editor types must be lowercase letters, numbers and hyphens, and must not match the `seo.url`, `slug`, or `store.slug` of another document of the same type.
 
 ## Why this design
 
@@ -108,6 +110,16 @@ options: {
 }
 ```
 
+Set `options.handle` to `false` on a document that lives at one fixed URL, such as a landing page singleton. The preview shows `pathPrefix` as the whole path and the URL handle field is removed:
+
+```ts
+// makers landing page, always at /makers
+options: {
+  pathPrefix: '/makers',
+  handle: false
+}
+```
+
 ## Stored Value
 
 A saved search listing value looks like this:
@@ -164,3 +176,28 @@ function resolveMetadata(page: Page) {
 ```
 
 The Studio preview uses similar fallbacks for common fields like `title`, `description`, `body`, and Shopify-style `store` data. Your frontend can keep those rules, simplify them, or replace them completely.
+
+## Persisting the slug
+
+The Studio preview only shows the slug a document would get. To save it, run the same rules where you write the document, usually a Sanity Function that fires when a document is published. The rules are exported from a separate entry with no React or Studio imports:
+
+```ts
+import {
+  resolveAvailableSlug,
+  SLUG_CANDIDATES_QUERY,
+  type SlugDocument,
+} from 'sanity-plugin-search-listing/slug'
+
+// `client` must use the `raw` perspective so drafts are counted.
+const documents = await client.fetch<SlugDocument[]>(SLUG_CANDIDATES_QUERY, {type: document._type})
+const slug = resolveAvailableSlug(document, documents)
+```
+
+Using this entry keeps the saved slug identical to the one the editor was shown. The rules:
+
+- An explicit slug always wins, in this order: `seo.url.current`, `slug.current`, `store.slug.current`.
+- Otherwise the slug is derived from `title`, then `name`, then `store.title`.
+- Documents with the same derived slug take `base`, `base-copy`, `base-copy-2`, and so on, in `_createdAt` order, skipping any slug another document already owns.
+- The draft and published copies of a document count as one document. Release versions are ignored.
+
+The entry also exports `slugify`, `isValidUrlHandle`, `isSlugTaken`, `getDocumentSlug` and `getTitleSlug`.

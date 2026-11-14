@@ -9,6 +9,11 @@ export default defineConfig({
       import: './dist/index.js',
       default: './dist/index.js',
     },
+    './slug': {
+      source: './src/exports/slug.ts',
+      import: './dist/slug.js',
+      default: './dist/slug.js',
+    },
   },
 
   // Remove this block to enable strict export validation
