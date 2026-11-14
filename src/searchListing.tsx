@@ -1,5 +1,5 @@
 import {EditIcon} from '@sanity/icons'
-import {Box, Button, Stack, Text, Tooltip} from '@sanity/ui'
+import {Box, Button, Card, Stack, Text, Tooltip} from '@sanity/ui'
 import React from 'react'
 import {
   defineField,
@@ -13,11 +13,21 @@ import {
   type StringFieldProps,
   type StringInputProps,
   useClient,
+  useDocumentStore,
   useFormValue,
   useSchema,
   useWorkspace,
 } from 'sanity'
 
+import {
+  FALLBACK_FIELDS,
+  type FallbackField,
+  getFallbackSources,
+  getImageUrl,
+  getQueryKey,
+  type NormalizedSource,
+  resolveFallback,
+} from './fallbacks'
 import {
   getCanonicalDocumentId,
   getDocumentSlug,
@@ -27,7 +37,11 @@ import {
   SLUG_CANDIDATES_QUERY,
   type SlugDocument,
 } from './resolveSlug'
-import type {SearchListingPluginOptions} from './types'
+import type {
+  SearchListingFallbacks,
+  SearchListingFallbackValue,
+  SearchListingPluginOptions,
+} from './types'
 
 const API_VERSION = '2025-02-19'
 const SLUG_LOOKUP_DELAY = 300
@@ -64,12 +78,17 @@ type StudioFormDocument = {
 
 type SearchListingInputProps = ObjectInputProps & {
   siteName?: string
+  pluginFallbacks?: SearchListingFallbacks
 }
+
+type ResolvedFallback = {value: SearchListingFallbackValue; source: NormalizedSource}
+type ResolvedFallbacks = Partial<Record<FallbackField, ResolvedFallback>>
 
 const SiteNameContext = React.createContext(null as string | null)
 const PathPrefixContext = React.createContext('/')
 const SlugFallbackContext = React.createContext('')
 const HasHandleContext = React.createContext(true)
+const FallbacksContext = React.createContext<ResolvedFallbacks>({})
 
 const SEO_MAX_LENGTH = {
   'Page title': 70,
@@ -93,6 +112,7 @@ const SEO_STUDIO_FIELD_STYLES = `
 
 export const searchListing = definePlugin<SearchListingPluginOptions | void>((options) => {
   const siteName = options?.siteName
+  const pluginFallbacks = options?.fallbacks
 
   const searchListingType = defineType({
     name: 'seo',
@@ -104,6 +124,7 @@ export const searchListing = definePlugin<SearchListingPluginOptions | void>((op
         React.createElement(SearchListingInput, {
           ...props,
           siteName,
+          pluginFallbacks,
         } as SearchListingInputProps),
     },
     fields: [
@@ -208,6 +229,12 @@ function SearchListingInput(props: SearchListingInputProps) {
   // `handle: false` marks a document that lives at a fixed URL (its `pathPrefix`).
   const hasHandle = !isCentralDocument && fieldOptions.handle !== false
   const slugFallback = useResolvedSlugFallback(document, {disabled: !hasHandle})
+  const fallbacks = useFallbacks(
+    document,
+    fieldOptions.fallbacks as SearchListingFallbacks | undefined,
+    props.pluginFallbacks,
+  )
+  const imageFallback = hasImage(props.value) ? undefined : fallbacks.image
   const [isEditing, setIsEditing] = React.useState(false)
   const handleEditToggle = React.useCallback(() => {
     setIsEditing((value) => !value)
@@ -226,41 +253,44 @@ function SearchListingInput(props: SearchListingInputProps) {
       <PathPrefixContext.Provider value={pathPrefix}>
         <SlugFallbackContext.Provider value={slugFallback}>
           <HasHandleContext.Provider value={hasHandle}>
-            <style>{SEO_STUDIO_FIELD_STYLES}</style>
-            <Stack gap={5}>
-              <Box style={{position: 'absolute', top: 0, right: 0}}>
-                <Tooltip
-                  animate
-                  delay={5}
-                  placement="top"
-                  content={
-                    <Text size={1} weight="medium">
-                      Edit listing
-                    </Text>
-                  }
-                  portal
-                >
-                  <Button
-                    mode="bleed"
-                    icon={EditIcon}
-                    padding={2}
-                    onClick={handleEditToggle}
-                    selected={isEditing}
-                  />
-                </Tooltip>
-              </Box>
-              {props.renderDefault({
-                ...props,
-                members: imageMembers,
-                value: getImageOnlyValue(props.value),
-              })}
-              <SearchListingPreview />
-              {isEditing &&
-                props.renderDefault({
+            <FallbacksContext.Provider value={fallbacks}>
+              <style>{SEO_STUDIO_FIELD_STYLES}</style>
+              <Stack gap={5}>
+                <Box style={{position: 'absolute', top: 0, right: 0}}>
+                  <Tooltip
+                    animate
+                    delay={5}
+                    placement="top"
+                    content={
+                      <Text size={1} weight="medium">
+                        Edit listing
+                      </Text>
+                    }
+                    portal
+                  >
+                    <Button
+                      mode="bleed"
+                      icon={EditIcon}
+                      padding={2}
+                      onClick={handleEditToggle}
+                      selected={isEditing}
+                    />
+                  </Tooltip>
+                </Box>
+                {imageFallback && <FallbackImage fallback={imageFallback} />}
+                {props.renderDefault({
                   ...props,
-                  members: metadataMembers,
+                  members: imageMembers,
+                  value: getImageOnlyValue(props.value),
                 })}
-            </Stack>
+                <SearchListingPreview />
+                {isEditing &&
+                  props.renderDefault({
+                    ...props,
+                    members: metadataMembers,
+                  })}
+              </Stack>
+            </FallbacksContext.Provider>
           </HasHandleContext.Provider>
         </SlugFallbackContext.Provider>
       </PathPrefixContext.Provider>
@@ -280,13 +310,10 @@ function SearchListingPreview() {
     ? []
     : getPathBreadcrumbSegments(pathPrefix, hasHandle ? slugFallback : '')
 
-  const title = getFieldText(document?.seo?.title) || getDocumentTitle(document)
-  const descriptionSource =
-    document?.seo?.description ||
-    document?.description ||
-    document?.store?.descriptionHtml ||
-    document?.body
-  const descriptionText = getFieldText(descriptionSource)
+  const fallbacks = React.useContext(FallbacksContext)
+  const title = getFieldText(document?.seo?.title) || getFieldText(fallbacks.title?.value)
+  const descriptionText =
+    getFieldText(document?.seo?.description) || getFieldText(fallbacks.description?.value)
   const description =
     descriptionText.length > SEO_MAX_LENGTH['Meta description']
       ? `${descriptionText.slice(0, SEO_MAX_LENGTH['Meta description'])}...`
@@ -336,6 +363,7 @@ function PlaceholderInput(props: StringInputProps) {
   const document = useFormValue([]) as StudioFormDocument
   const fieldName = getFieldName(props)
   const isCentralDocument = isCentralDocumentType(document?._type)
+  const fallbacks = React.useContext(FallbacksContext)
 
   const placeholder = React.useMemo(() => {
     if (fieldName === 'description') {
@@ -343,17 +371,15 @@ function PlaceholderInput(props: StringInputProps) {
         return CENTRAL_SEO_DESCRIPTION_PLACEHOLDER
       }
 
-      return getFieldText(
-        document?.description || document?.store?.descriptionHtml || document?.body,
-      )
+      return getFieldText(fallbacks.description?.value)
     }
 
     if (isCentralDocument) {
       return getHost()
     }
 
-    return getDocumentTitle(document)
-  }, [document, fieldName, isCentralDocument])
+    return getFieldText(fallbacks.title?.value)
+  }, [fallbacks, fieldName, isCentralDocument])
 
   const maxLength = getSeoFieldMaxLength(fieldName, isCentralDocument)
 
@@ -505,8 +531,114 @@ async function isUrlHandleUnique(slug: string, context: SlugValidationContext) {
   return !isTaken
 }
 
-function getDocumentTitle(document: StudioFormDocument | undefined) {
-  return getFieldText(document?.title || document?.name || document?.store?.title)
+/**
+ * The first fallback with a value for each field. Path sources read the form document;
+ * query sources are live queries, shared by every field that uses the same one.
+ */
+function useFallbacks(
+  document: StudioFormDocument,
+  fieldFallbacks: SearchListingFallbacks | undefined,
+  pluginFallbacks: SearchListingFallbacks | undefined,
+): ResolvedFallbacks {
+  const documentStore = useDocumentStore()
+  const id = getCanonicalDocumentId(document?._id)
+  const type = typeof document?._type === 'string' ? document._type : ''
+
+  const sourcesByField = React.useMemo(
+    () =>
+      Object.fromEntries(
+        FALLBACK_FIELDS.map((field) => [
+          field,
+          getFallbackSources(field, fieldFallbacks, pluginFallbacks),
+        ]),
+      ) as Record<FallbackField, NormalizedSource[]>,
+    [fieldFallbacks, pluginFallbacks],
+  )
+
+  const querySources = React.useMemo(() => {
+    const byKey = new Map<string, Extract<NormalizedSource, {kind: 'query'}>>()
+    for (const sources of Object.values(sourcesByField)) {
+      for (const source of sources) {
+        if (source.kind === 'query') byKey.set(getQueryKey(source), source)
+      }
+    }
+    return [...byKey.entries()]
+  }, [sourcesByField])
+
+  const [queryResults, setQueryResults] = React.useState<ReadonlyMap<string, unknown>>(
+    () => new Map(),
+  )
+
+  React.useEffect(() => {
+    if (querySources.length === 0) return undefined
+
+    const subscriptions = querySources.map(([key, source]) =>
+      documentStore
+        .listenQuery(
+          source.query,
+          {...source.params, id, draftId: `drafts.${id}`, type},
+          {apiVersion: API_VERSION, perspective: 'drafts', tag: 'search-listing.fallback'},
+        )
+        .subscribe({
+          next: (result: unknown) => {
+            setQueryResults((previous) => new Map(previous).set(key, result))
+          },
+          error: () => {
+            // A failing query is skipped; the next source is used instead.
+          },
+        }),
+    )
+
+    return () => subscriptions.forEach((subscription) => subscription.unsubscribe())
+  }, [documentStore, querySources, id, type])
+
+  return React.useMemo(() => {
+    const resolved: ResolvedFallbacks = {}
+    for (const field of FALLBACK_FIELDS) {
+      const fallback = resolveFallback(sourcesByField[field], document, queryResults)
+      if (fallback) resolved[field] = fallback
+    }
+    return resolved
+  }, [sourcesByField, document, queryResults])
+}
+
+/** The image a listing falls back to, shown in place of the empty image field. */
+function FallbackImage({fallback}: {fallback: ResolvedFallback}) {
+  const client = useClient({apiVersion: API_VERSION})
+  const {projectId, dataset} = client.config()
+  const url = getImageUrl(fallback.value, {projectId, dataset})
+
+  if (!url) {
+    return null
+  }
+
+  const label = fallback.source.label
+
+  return (
+    <Stack gap={2}>
+      <Card radius={2} overflow="hidden" tone="transparent" border>
+        <img
+          src={url}
+          alt=""
+          style={{
+            display: 'block',
+            width: '100%',
+            aspectRatio: '1200 / 630',
+            objectFit: 'cover',
+            opacity: 0.75,
+          }}
+        />
+      </Card>
+      <Text size={1} muted>
+        {label ? `Fallback image from ${label}.` : 'Fallback image.'} Add an image to replace it.
+      </Text>
+    </Stack>
+  )
+}
+
+function hasImage(value: Record<string, unknown> | undefined) {
+  const image = value?.image
+  return Boolean(image && typeof image === 'object' && 'asset' in image && image.asset)
 }
 
 function isCentralDocumentType(documentType: unknown) {
@@ -693,7 +825,10 @@ function getFieldOptions(
 ): Record<string, unknown> {
   const ownOptions = props.schemaType?.options
 
-  if (isRecord(ownOptions) && ('pathPrefix' in ownOptions || 'handle' in ownOptions)) {
+  if (
+    isRecord(ownOptions) &&
+    ('pathPrefix' in ownOptions || 'handle' in ownOptions || 'fallbacks' in ownOptions)
+  ) {
     return ownOptions
   }
 

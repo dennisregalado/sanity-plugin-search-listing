@@ -27,7 +27,7 @@ Most projects need the same SEO fields on pages, products, posts, collections, a
 
 **vs. a highly configurable SEO plugin**
 
-- Only one plugin option: `siteName`.
+- Two plugin options: `siteName` and `fallbacks`.
 - No project-specific routes, document types, or frontend assumptions.
 - The stored value stays plain Sanity data that your frontend can query however it wants.
 
@@ -119,6 +119,44 @@ options: {
   handle: false
 }
 ```
+
+## Fallbacks
+
+When a listing field is empty, the preview and the field placeholders show a fallback, the way the storefront would. Fallbacks can be set per field and for the whole plugin, much like `sanity-plugin-link-picker` routes:
+
+```ts
+// sanity.config.ts: site-wide, tried last
+searchListing({
+  fallbacks: {
+    image: {query: '*[_id == "preferences"][0].seo.image', label: 'Preferences'},
+  },
+})
+
+// product schema: tried first
+defineField({
+  name: 'seo',
+  type: 'seo',
+  options: {
+    pathPrefix: '/products/',
+    fallbacks: {
+      image: {path: 'store.previewImageUrl', label: 'Shopify'},
+    },
+  },
+})
+```
+
+A product with no listing image shows its Shopify image; any other document shows the image set in Preferences. Uploading an image replaces the fallback.
+
+Each of `image`, `title` and `description` takes one source or a list, tried in order:
+
+- A path on the document, as a string (`'store.previewImageUrl'`) or `{path, label}`.
+- A GROQ query, as `{query, params?, label?}`. It receives `$id`, `$draftId` and `$type` for the document being edited, sees drafts, and updates live.
+
+The field's sources are tried before the plugin's. Without field fallbacks, `title` reads `title`, `name`, then `store.title`, and `description` reads `description`, `store.descriptionHtml`, then `body`. Setting `title` or `description` on a field replaces those defaults; an empty list turns them off.
+
+An image fallback can be a Sanity image object, an image asset, or an image URL.
+
+Fallbacks are only shown in the Studio; nothing is saved. Apply the same fallbacks where your frontend builds its metadata.
 
 ## Stored Value
 
