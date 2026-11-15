@@ -89,6 +89,6 @@
     "node": ">=20.19 <22 || >=22.12"
   },
   "bin": {
-    "sanity-plugin-search-listing": "./bin/skills.mjs"
+    "sanity-plugin-search-listing": "bin/skills.mjs"
   }
 }
