@@ -11,7 +11,9 @@ It registers a single `seo` object type with four fields:
 
 The plugin also adds a compact search listing preview above the editable fields. Editors can see the current title, description, URL, image, and common fallbacks without leaving the document form.
 
-When a document does not have an SEO URL, document slug, or storefront slug yet, the URL handle field shows a visual fallback slugified from the document title. This does not save a slug value; it only previews the URL an automatic slug function could create later.
+When a document does not have an SEO URL, document slug, or storefront slug yet, the URL handle field shows a visual fallback slugified from the document's `title`, `name`, or `store.title`. This does not save a slug value; it only previews the URL an automatic slug function would create. See [Persisting the slug](#persisting-the-slug).
+
+A URL handle the editor types must be lowercase letters, numbers and hyphens, and must not match the `seo.url`, `slug`, or `store.slug` of another document of the same type.
 
 ## Why this design
 
@@ -25,9 +27,25 @@ Most projects need the same SEO fields on pages, products, posts, collections, a
 
 **vs. a highly configurable SEO plugin**
 
-- Only one plugin option: `siteName`.
+- Two plugin options: `siteName` and `fallbacks`.
 - No project-specific routes, document types, or frontend assumptions.
 - The stored value stays plain Sanity data that your frontend can query however it wants.
+
+## Agent skills
+
+The package ships skills that walk a coding agent through a full setup or a migration: Studio schema, the slug and redirect Sanity Functions, and frontend metadata. Copy them into a project, and resync after upgrading:
+
+```sh
+npx sanity-plugin-search-listing skills sync
+```
+
+They are written to `.claude/skills` (Claude Code) and `.agents/skills` (Codex, Cursor, OpenCode):
+
+- `search-listing-setup`: register the plugin, add `seo` fields with routes and fallbacks, hide routing slugs, and audit an existing dataset before migrating.
+- `search-listing-functions`: `auto-slug` and `auto-redirect`, with tested reference code, plus the storefront redirect lookup.
+- `search-listing-metadata`: render `<title>`, description and sharing tags with the same fallbacks as the Studio preview.
+
+A skill you edit locally is kept on the next sync (`--force` replaces it). `npx sanity-plugin-search-listing skills check` exits non-zero when skills are missing or out of date; add `--mode=warn` for dev scripts.
 
 ## Installation
 
@@ -108,6 +126,54 @@ options: {
 }
 ```
 
+Set `options.handle` to `false` on a document that lives at one fixed URL, such as a landing page singleton. The preview shows `pathPrefix` as the whole path and the URL handle field is removed:
+
+```ts
+// makers landing page, always at /makers
+options: {
+  pathPrefix: '/makers',
+  handle: false
+}
+```
+
+## Fallbacks
+
+When a listing field is empty, the preview and the field placeholders show a fallback, the way the storefront would. Fallbacks can be set per field and for the whole plugin, much like `sanity-plugin-link-picker` routes:
+
+```ts
+// sanity.config.ts: site-wide, tried last
+searchListing({
+  fallbacks: {
+    image: {query: '*[_id == "preferences"][0].seo.image', label: 'Preferences'},
+  },
+})
+
+// product schema: tried first
+defineField({
+  name: 'seo',
+  type: 'seo',
+  options: {
+    pathPrefix: '/products/',
+    fallbacks: {
+      image: {path: 'store.previewImageUrl', label: 'Shopify'},
+    },
+  },
+})
+```
+
+A product with no listing image shows its Shopify image; any other document shows the image set in Preferences. Uploading an image replaces the fallback.
+
+Each of `image`, `title` and `description` takes one source or a list, tried in order:
+
+- A path on the document, as a string (`'store.previewImageUrl'`) or `{path, label}`.
+- A GROQ query, as `{query, params?, label?}`. It receives `$id`, `$draftId` and `$type` for the document being edited, sees drafts, and updates live.
+
+The field's sources are tried before the plugin's. Without field fallbacks, `title` reads `title`, `name`, then `store.title`, and `description` reads `description`, `store.descriptionHtml`, then `body`. Setting `title` or `description` on a field replaces those defaults; an empty list turns them off.
+
+An image fallback can be a Sanity image object, an image asset, or an image URL.
+
+Fallbacks are only shown in the Studio; nothing is saved. Apply the same fallbacks where your frontend builds its metadata.
+
 ## Stored Value
 
 A saved search listing value looks like this:
@@ -164,3 +230,28 @@ function resolveMetadata(page: Page) {
 ```
 
 The Studio preview uses similar fallbacks for common fields like `title`, `description`, `body`, and Shopify-style `store` data. Your frontend can keep those rules, simplify them, or replace them completely.
+
+## Persisting the slug
+
+The Studio preview only shows the slug a document would get. To save it, run the same rules where you write the document, usually a Sanity Function that fires when a document is published. The rules are exported from a separate entry with no React or Studio imports:
+
+```ts
+import {
+  resolveAvailableSlug,
+  SLUG_CANDIDATES_QUERY,
+  type SlugDocument,
+} from 'sanity-plugin-search-listing/slug'
+
+// `client` must use the `raw` perspective so drafts are counted.
+const documents = await client.fetch<SlugDocument[]>(SLUG_CANDIDATES_QUERY, {type: document._type})
+const slug = resolveAvailableSlug(document, documents)
+```
+
+Using this entry keeps the saved slug identical to the one the editor was shown. The rules:
+
+- An explicit slug always wins, in this order: `seo.url.current`, `slug.current`, `store.slug.current`.
+- Otherwise the slug is derived from `title`, then `name`, then `store.title`.
+- Documents with the same derived slug take `base`, `base-copy`, `base-copy-2`, and so on, in `_createdAt` order, skipping any slug another document already owns.
+- The draft and published copies of a document count as one document. Release versions are ignored.
+
+The entry also exports `slugify`, `isValidUrlHandle`, `isSlugTaken`, `getDocumentSlug` and `getTitleSlug`.
