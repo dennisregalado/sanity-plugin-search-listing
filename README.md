@@ -31,6 +31,22 @@ Most projects need the same SEO fields on pages, products, posts, collections, a
 - No project-specific routes, document types, or frontend assumptions.
 - The stored value stays plain Sanity data that your frontend can query however it wants.
 
+## Agent skills
+
+The package ships skills that walk a coding agent through a full setup or a migration: Studio schema, the slug and redirect Sanity Functions, and frontend metadata. Copy them into a project, and resync after upgrading:
+
+```sh
+npx sanity-plugin-search-listing skills sync
+```
+
+They are written to `.claude/skills` (Claude Code) and `.agents/skills` (Codex, Cursor, OpenCode):
+
+- `search-listing-setup`: register the plugin, add `seo` fields with routes and fallbacks, hide routing slugs, and audit an existing dataset before migrating.
+- `search-listing-functions`: `auto-slug` and `auto-redirect`, with tested reference code, plus the storefront redirect lookup.
+- `search-listing-metadata`: render `<title>`, description and sharing tags with the same fallbacks as the Studio preview.
+
+A skill you edit locally is kept on the next sync (`--force` replaces it). `npx sanity-plugin-search-listing skills check` exits non-zero when skills are missing or out of date; add `--mode=warn` for dev scripts.
+
 ## Installation
 
 ```sh

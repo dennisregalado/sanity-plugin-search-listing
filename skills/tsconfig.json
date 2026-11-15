@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.settings",
+  "compilerOptions": {
+    "rootDir": "..",
+    "types": ["node"],
+    "paths": {"sanity-plugin-search-listing/slug": ["../src/exports/slug.ts"]}
+  },
+  "include": ["**/sync.ts", "**/plan.ts", "**/redirect-lookup.ts", "**/seo.ts", "**/*.test.ts"]
+}
