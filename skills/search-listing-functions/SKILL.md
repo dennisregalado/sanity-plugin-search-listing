@@ -37,7 +37,7 @@ Each function needs its own `package.json` with `@sanity/client`, `@sanity/funct
 
 Never reimplement `slugify`, the duplicate rules or the filters: the Studio preview runs the same code, so the saved slug is always the one the editor saw.
 
-**Duplicates.** The plugin's Duplicate action (registered after `structureTool()`) leaves out `seo.url` and `slug`, so the copy matches the `autoSlugEvent` filter (no handle, no slug) and gets `<title-slug>` or `<title-slug>-copy` when published. A copy made another way that kept the original's handle is never invoked, and the Studio's uniqueness check blocks publishing it.
+**Duplicates.** The plugin's Duplicate action (registered after `structureTool()`) appends " Copy" to the title (once) and leaves out `seo.url` and `slug`, so the copy matches the `autoSlugEvent` filter (no handle, no slug) and gets its title slug when published: `homepage-copy`, then `homepage-copy-2`. A copy made another way that kept the original's handle is never invoked, and the Studio's uniqueness check blocks publishing it.
 
 ## Behaviour to preserve
 
@@ -50,7 +50,7 @@ These are deliberate. Keep them when adapting the code.
 - A handle typed as `Our Story` is saved as `our-story`.
 - A handle another document of the type already owns (as `seo.url`, `slug` or `store.slug`) is refused: nothing is written and an error is logged. The live URL stays put.
 - A document with `slug.current` and no handle is left alone. This keeps legacy URLs.
-- Duplicate titles get `base`, `base-copy`, `base-copy-2` in `_createdAt` order.
+- Duplicate titles get `base`, `base-2`, `base-3` in `_createdAt` order.
 - If a draft is open, its `slug.current` is updated in the same transaction so publishing it does not restore the old slug. If the draft already has a handle, that handle is used.
 - The client uses `perspective: 'raw'` so drafts reserve slugs too.
 

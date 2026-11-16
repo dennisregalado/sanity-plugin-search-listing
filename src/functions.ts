@@ -71,7 +71,8 @@ function typeList(types: readonly string[]): string {
  * The filter describes a state, not a change: a published document whose handle differs
  * from its slug, or that has neither. The function's own patch leaves it in sync, so it does
  * not run again, and a document that drifts is repaired on its next publish. A duplicate
- * made in the Studio has neither, so it gets a free `-copy` slug when it is published.
+ * made in the Studio has neither, so it gets its own slug from its title ("Homepage Copy" at
+ * `homepage-copy`, then `homepage-copy-2`) when it is published.
  */
 export function autoSlugEvent(
   types: readonly string[],
@@ -104,7 +105,7 @@ export type SyncSlugResult =
 /**
  * Keeps `slug.current`, the field the frontend routes on, equal to the URL handle
  * (`seo.url.current`), and gives a published document with neither its title slug, with
- * `-copy` when that is taken. `document` is the `autoSlugEvent` projection.
+ * `-2`, `-3` when that is taken. `document` is the `autoSlugEvent` projection.
  *
  * - A handle typed as `Our Story` is saved as `our-story`.
  * - A handle another document of the type owns is refused; the live URL stays.

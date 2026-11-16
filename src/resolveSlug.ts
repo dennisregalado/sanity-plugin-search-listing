@@ -94,7 +94,7 @@ export function getCanonicalDocumentId(id: unknown): string {
 /**
  * The slug `currentDocument` owns, or the one it would be given. `documents` is the result
  * of `SLUG_CANDIDATES_QUERY` for its type. An explicit slug always wins. Otherwise documents
- * with the same title slug take `base`, `base-copy`, `base-copy-2`... in creation order,
+ * with the same title slug take `base`, `base-2`, `base-3`... in creation order,
  * skipping slugs other documents already own.
  */
 export function resolveAvailableSlug(
@@ -138,12 +138,12 @@ export function resolveAvailableSlug(
     .sort(compareCandidateDocuments)
 
   for (const document of implicitDocuments) {
-    const candidate = getCopyCandidate(titleSlug, usedSlugs)
+    const candidate = getNumberedCandidate(titleSlug, usedSlugs)
     if (getCanonicalDocumentId(document._id) === currentKey) return candidate
     usedSlugs.add(candidate)
   }
 
-  return getCopyCandidate(titleSlug, usedSlugs)
+  return getNumberedCandidate(titleSlug, usedSlugs)
 }
 
 /**
@@ -172,11 +172,11 @@ function getOwnedSlugs(document: SlugDocument): string[] {
   ].filter(Boolean)
 }
 
-function getCopyCandidate(base: string, usedSlugs: Set<string>): string {
+function getNumberedCandidate(base: string, usedSlugs: Set<string>): string {
   if (!usedSlugs.has(base)) return base
 
-  for (let index = 1; ; index += 1) {
-    const candidate = index === 1 ? `${base}-copy` : `${base}-copy-${index}`
+  for (let index = 2; ; index += 1) {
+    const candidate = `${base}-${index}`
     if (!usedSlugs.has(candidate)) return candidate
   }
 }

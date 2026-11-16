@@ -1,7 +1,7 @@
 import {evaluate, parse} from 'groq-js'
 import {beforeEach, describe, expect, test} from 'vitest'
 
-import {omitUrlHandle} from './duplicate'
+import {omitUrlHandle, prepareDuplicate} from './duplicate'
 import {
   autoRedirectEvent,
   autoSlugEvent,
@@ -138,7 +138,7 @@ describe('syncSlug', () => {
     expect(slugs('m')).toEqual({slug: 'atelier-ete', url: 'atelier-ete'})
   })
 
-  test('same-title documents get -copy in creation order', async () => {
+  test('same-title documents are numbered in creation order', async () => {
     dataset.push(
       {_id: 'a', _type: 'policy', _createdAt: '2026-01-01', title: 'Returns'},
       {_id: 'b', _type: 'policy', _createdAt: '2026-01-02', title: 'Returns'},
@@ -147,7 +147,7 @@ describe('syncSlug', () => {
     await run('b')
     await run('a')
     expect(slugs('a').slug).toBe('returns')
-    expect(slugs('b').slug).toBe('returns-copy')
+    expect(slugs('b').slug).toBe('returns-2')
   })
 
   test('a changed URL handle becomes the routing slug', async () => {
@@ -251,7 +251,18 @@ describe('duplicating a document', () => {
     seo: {title: 'Kept', url: {_type: 'slug', current: 'homepage'}},
   }
 
-  test('the Studio copy leaves out only the URL handle and routing slug', () => {
+  /** Duplicate `id` the way the plugin's Duplicate action does, then publish the copy. */
+  async function duplicate(id: string, copyId: string, createdAt: string) {
+    dataset.push({
+      ...prepareDuplicate(structuredClone(find(id)!)),
+      _id: copyId,
+      _createdAt: createdAt,
+    })
+    expect(await run(copyId)).toBe(true)
+    return {title: find(copyId)!.title, ...slugs(copyId)}
+  }
+
+  test('omitUrlHandle leaves out only the URL handle and routing slug', () => {
     expect(omitUrlHandle(original)).toEqual({
       _id: 'orig',
       _type: 'page',
@@ -264,43 +275,52 @@ describe('duplicating a document', () => {
         {title: 'No seo', listing: {url: 'x', title: 'y'}},
         {seoFields: ['listing'], omit: []},
       ),
-    ).toEqual({
-      title: 'No seo',
-      listing: {title: 'y'},
-    })
+    ).toEqual({title: 'No seo', listing: {title: 'y'}})
   })
 
-  test('published copies take -copy, then -copy-2; the original keeps its URL', async () => {
-    dataset.push(structuredClone(original))
-    for (const [id, createdAt] of [
-      ['dup1', '2026-02-01'],
-      ['dup2', '2026-03-01'],
-    ] as const) {
-      dataset.push({...omitUrlHandle(structuredClone(original)), _id: id, _createdAt: createdAt})
-      expect(await run(id)).toBe(true)
-    }
+  test('prepareDuplicate appends " Copy" once, to the title or else the name', () => {
+    expect(prepareDuplicate(original).title).toBe('Homepage Copy')
+    expect(prepareDuplicate({...original, title: 'Homepage Copy'}).title).toBe('Homepage Copy')
+    expect(prepareDuplicate({...original, title: 'Homepage copy '}).title).toBe('Homepage copy ')
+    expect(prepareDuplicate({_type: 'maker', name: 'Atelier Été'}).name).toBe('Atelier Été Copy')
+    expect(prepareDuplicate(original, {titleSuffix: false}).title).toBe('Homepage')
+    expect(prepareDuplicate(original, {titleSuffix: ' (copy)'}).title).toBe('Homepage (copy)')
+    expect(prepareDuplicate({_type: 'page', title: ''}).title).toBe('')
+  })
 
+  test('copies read "Homepage Copy" and take homepage-copy, -2, -3; the original keeps its URL', async () => {
+    dataset.push(structuredClone(original))
+
+    expect(await duplicate('orig', 'dup1', '2026-02-01')).toEqual({
+      title: 'Homepage Copy',
+      slug: 'homepage-copy',
+      url: 'homepage-copy',
+    })
+    // Duplicating the original again, then duplicating a copy.
+    expect(await duplicate('orig', 'dup2', '2026-03-01')).toMatchObject({
+      title: 'Homepage Copy',
+      slug: 'homepage-copy-2',
+    })
+    expect(await duplicate('dup1', 'dup3', '2026-04-01')).toMatchObject({
+      title: 'Homepage Copy',
+      slug: 'homepage-copy-3',
+    })
     expect(slugs('orig')).toEqual({slug: 'homepage', url: 'homepage'})
-    expect(slugs('dup1')).toEqual({slug: 'homepage-copy', url: 'homepage-copy'})
-    expect(slugs('dup2')).toEqual({slug: 'homepage-copy-2', url: 'homepage-copy-2'})
     expect(await run('orig')).toBe(false)
   })
 
-  test('a copy whose original handle differs from its title gets the title slug', async () => {
+  test('the URL follows the title, not the original handle', async () => {
     dataset.push({
       ...structuredClone(original),
       title: 'Rich text template',
       slug: {_type: 'slug', current: 'rich-text-page'},
       seo: {url: {_type: 'slug', current: 'rich-text-page'}},
     })
-    dataset.push({
-      ...omitUrlHandle(structuredClone(find('orig')!)),
-      _id: 'dup',
-      _createdAt: '2026-02-01',
-    })
 
-    await run('dup')
-    expect(slugs('dup').slug).toBe('rich-text-template')
+    expect(await duplicate('orig', 'dup', '2026-02-01')).toMatchObject({
+      title: 'Rich text template Copy',
+      slug: 'rich-text-template-copy',
+    })
   })
 
   test('a copy that kept the original URL is never invoked, which is why the Studio strips it', async () => {

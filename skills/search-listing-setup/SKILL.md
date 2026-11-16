@@ -41,7 +41,7 @@ export default defineConfig({
   plugins: [
     structureTool(/* ... */),
     // After structureTool(): it adds the Duplicate action this plugin wraps, so a duplicate
-    // gets its own `-copy` URL instead of the original's. `duplicate: false` turns that off.
+    // is titled "… Copy" with its own URL instead of the original's. `duplicate: false` turns that off.
     searchListing({
       siteName: 'Site Name', // defaults to the workspace title
       fallbacks: {

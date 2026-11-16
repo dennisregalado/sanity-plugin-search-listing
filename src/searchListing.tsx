@@ -21,7 +21,7 @@ import {
   useWorkspace,
 } from 'sanity'
 
-import {omitUrlHandle} from './duplicate'
+import {prepareDuplicate} from './duplicate'
 import {
   FALLBACK_FIELDS,
   type FallbackField,
@@ -119,6 +119,8 @@ export const searchListing = definePlugin<SearchListingPluginOptions | void>((op
   const duplicateOption = options?.duplicate ?? true
   const duplicateOmit =
     typeof duplicateOption === 'object' ? (duplicateOption.omit ?? ['slug']) : ['slug']
+  const duplicateTitleSuffix =
+    typeof duplicateOption === 'object' ? duplicateOption.titleSuffix : undefined
 
   const searchListingType = defineType({
     name: 'seo',
@@ -230,7 +232,11 @@ export const searchListing = definePlugin<SearchListingPluginOptions | void>((op
 
               return prev.map((action) =>
                 action.action === 'duplicate'
-                  ? withoutUrlOnDuplicate(action, {seoFields, omit: duplicateOmit})
+                  ? withoutUrlOnDuplicate(action, {
+                      seoFields,
+                      omit: duplicateOmit,
+                      titleSuffix: duplicateTitleSuffix,
+                    })
                   : action,
               )
             },
@@ -259,13 +265,13 @@ function getSeoFieldNames(schemaType: unknown): string[] {
 
 function withoutUrlOnDuplicate(
   duplicate: DocumentActionComponent,
-  options: {seoFields: string[]; omit: readonly string[]},
+  options: {seoFields: string[]; omit: readonly string[]; titleSuffix?: string | false},
 ): DocumentActionComponent {
   const Duplicate = duplicate as unknown as (
     props: DuplicateActionProps,
   ) => ReturnType<DocumentActionComponent>
   const action: DocumentActionComponent = (props) =>
-    Duplicate({...props, mapDocument: (document) => omitUrlHandle(document, options)})
+    Duplicate({...props, mapDocument: (document) => prepareDuplicate(document, options)})
 
   action.action = 'duplicate'
   action.displayName = 'SearchListingDuplicateAction'

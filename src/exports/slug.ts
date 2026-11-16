@@ -1,2 +1,7 @@
-export {omitUrlHandle, type OmitUrlHandleOptions} from '../duplicate'
+export {
+  omitUrlHandle,
+  type OmitUrlHandleOptions,
+  prepareDuplicate,
+  type PrepareDuplicateOptions,
+} from '../duplicate'
 export * from '../resolveSlug'
