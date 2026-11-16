@@ -1,6 +1,6 @@
 {
   "name": "sanity-plugin-search-listing",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "A small Sanity Studio SEO search listing field.",
   "keywords": [
     "sanity",
@@ -51,13 +51,10 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.dist.json --noEmit && tsc -p skills/tsconfig.json --noEmit"
   },
-  "dependencies": {
-    "@sanity/icons": "^3.7.4",
-    "@sanity/ui": "^3.2.0"
-  },
   "devDependencies": {
     "@sanity/pkg-utils": "^10.7.2",
     "@sanity/plugin-kit": "^6.0.0",
+    "@sanity/ui": "^4.4.11",
     "@types/react": "^19.2.17",
     "@typescript-eslint/eslint-plugin": "^8.62.0",
     "@typescript-eslint/parser": "^8.62.0",
@@ -78,10 +75,14 @@
     "vitest": "^5.1.0"
   },
   "peerDependencies": {
+    "@sanity/ui": "^3 || ^4",
     "react": "^18 || ^19",
     "sanity": "^5 || ^6.0.0-0"
   },
   "peerDependenciesMeta": {
+    "@sanity/ui": {
+      "optional": true
+    },
     "react": {
       "optional": true
     },
