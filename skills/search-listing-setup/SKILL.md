@@ -33,7 +33,7 @@ Answer these from the code, not from assumptions. Write the answers down; later 
 npm install sanity-plugin-search-listing
 ```
 
-The plugin requires Sanity 6 (`sanity` ^6). It uses the Studio's `@sanity/ui` 4 and `@sanity/icons` 5 as peer dependencies; `sanity` already installs both, so do not add them separately. If the project is on Sanity 5, upgrade the Studio first or pin `sanity-plugin-search-listing@1.3`.
+The plugin requires Sanity 6.10 or later (`sanity` ^6.10.0; 6.0 to 6.9 ship `@sanity/ui` 3) and React 19.2 or later. It uses the Studio's `@sanity/ui` 4 and `@sanity/icons` 5 as peer dependencies; `sanity` already installs both, so do not add them separately. If the project is on Sanity 5, upgrade the Studio first or pin `sanity-plugin-search-listing@1.3`.
 
 ```ts
 // sanity.config.ts

@@ -53,7 +53,7 @@ A skill you edit locally is kept on the next sync (`--force` replaces it). `npx 
 npm install sanity-plugin-search-listing
 ```
 
-The Studio plugin requires Sanity 6. It uses the Studio's own `@sanity/ui` (4) and `@sanity/icons` (5), which `sanity` already installs, so they are peer dependencies rather than bundled copies. For Sanity 5, stay on 1.3.x.
+The Studio plugin requires Sanity 6.10 or later and React 19.2 or later. It uses the Studio's own `@sanity/ui` (4) and `@sanity/icons` (5), which `sanity` already installs, so they are peer dependencies rather than bundled copies. Sanity 6.0 to 6.9 ship `@sanity/ui` 3, which this plugin does not support. For Sanity 5, stay on 1.3.x.
 
 The `/slug` and `/functions` entries need none of these: `sanity`, `react`, `@sanity/ui` and `@sanity/icons` are optional peers, so a Sanity Function can install the package without a Studio.
 
@@ -237,7 +237,7 @@ Fallbacks are only shown in the Studio; nothing is saved. Apply the same fallbac
 
 ## Migrating to 2.0
 
-- **Sanity 6 only.** `@sanity/ui` 4, `@sanity/icons` 5 and `sanity` 6 are peer dependencies.
+- **Sanity 6.10+ only.** `@sanity/ui` 4, `@sanity/icons` 5 and `sanity` 6.10+ are peer dependencies.
 - **No Shopify defaults.** Title, description and slug no longer read `store.title`, `store.descriptionHtml`, `body` or `store.slug` unless configured. Add `...shopifyProduct` / `...shopifyCollection` to Sanity Connect `seo` fields, and `description: 'body'` (or similar) where the body was the description.
 - **`home: true` instead of type names.** The plugin no longer treats `preferences`, `site`, `storefront` or `theme` specially; set `home: true` on that document's `seo` field.
 - **Numbered duplicates.** Same-title slugs are `base-2`, `base-3` (were `base-copy`, `base-copy-2`); saved slugs never change.
