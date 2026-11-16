@@ -1,5 +1,6 @@
-import {EditIcon} from '@sanity/icons'
-import {Box, Button, Card, Stack, Text, Tooltip} from '@sanity/ui'
+// Only components that @sanity/ui 3 and 4 both export from the root: the Studio's own copy is
+// used (a peer dependency), and 4 moved Tooltip to a subpath.
+import {Box, Button, Card, Stack, Text} from '@sanity/ui'
 import React from 'react'
 import {
   defineField,
@@ -278,6 +279,31 @@ function withoutUrlOnDuplicate(
   return action
 }
 
+/**
+ * The pencil from `@sanity/icons`, inlined: icons 3 exports `EditIcon` from its root and icons 5
+ * only from `@sanity/icons/Edit`, so no single import works across Sanity 5 and 6.
+ */
+function EditIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      data-sanity-icon="edit"
+      width="1em"
+      height="1em"
+      viewBox="0 0 25 25"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      <path
+        d="M15 7L18 10M6 19L7 15L17 5L20 8L10 18L6 19Z"
+        stroke="currentColor"
+        strokeWidth={1.2}
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 function SearchListingField(props: ObjectFieldProps) {
   const pathPrefix = getPathPrefixFromOptions(props.schemaType.options) || '/'
 
@@ -326,25 +352,15 @@ function SearchListingInput(props: SearchListingInputProps) {
               <style>{SEO_STUDIO_FIELD_STYLES}</style>
               <Stack gap={5}>
                 <Box style={{position: 'absolute', top: 0, right: 0}}>
-                  <Tooltip
-                    animate
-                    delay={5}
-                    placement="top"
-                    content={
-                      <Text size={1} weight="medium">
-                        Edit listing
-                      </Text>
-                    }
-                    portal
-                  >
-                    <Button
-                      mode="bleed"
-                      icon={EditIcon}
-                      padding={2}
-                      onClick={handleEditToggle}
-                      selected={isEditing}
-                    />
-                  </Tooltip>
+                  <Button
+                    mode="bleed"
+                    icon={EditIcon}
+                    padding={2}
+                    onClick={handleEditToggle}
+                    selected={isEditing}
+                    title="Edit listing"
+                    aria-label="Edit listing"
+                  />
                 </Box>
                 {imageFallback && <FallbackImage fallback={imageFallback} />}
                 {props.renderDefault({
