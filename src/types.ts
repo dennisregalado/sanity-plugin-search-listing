@@ -1,3 +1,5 @@
+import type {SlugOptions} from './resolveSlug'
+
 /**
  * Where a fallback comes from when the search listing field is empty:
  *
@@ -69,8 +71,33 @@ export interface SearchListingFieldOptions {
   handle?: boolean
   /**
    * Fallbacks for this field, tried before the plugin's. Setting `title` or `description`
-   * here replaces the defaults read from the document (`title`, `name`, `store.title`, and
-   * `description`, `store.descriptionHtml`, `body`).
+   * here replaces the defaults read from the document (`title`, then `name`; `description`);
+   * extend them with `defaultFallbacks`: `title: [...defaultFallbacks.title, 'headline']`.
    */
   fallbacks?: SearchListingFallbacks
+  /**
+   * The site's own listing, set on a settings or home page document. It has no URL handle,
+   * the preview shows the host, the description may run to 320 characters, and the title
+   * field reads "Home page title".
+   */
+  home?: boolean
+  /**
+   * Lengths past which the listing warns that search engines may truncate it.
+   * @defaultValue `{title: 70, description: 160}` (description 320 with `home`)
+   */
+  maxLength?: {title?: number; description?: number}
+  /**
+   * Where the URL comes from when the document has no URL handle of its own: the fields a
+   * slug is derived from, and the slug fields it may already route on. Dot paths.
+   * @defaultValue `{source: ['title', 'name'], current: ['slug']}`
+   */
+  slug?: SlugOptions
+  /** Extra lines in the listing preview. */
+  preview?: {
+    /**
+     * A price shown under the description: a path to a number, such as Sanity Connect's
+     * `store.priceRange.minVariantPrice`, and its currency (default `USD`).
+     */
+    price?: string | {path: string; currency?: string}
+  }
 }

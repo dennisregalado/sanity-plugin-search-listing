@@ -1,6 +1,7 @@
 import {describe, expect, it} from 'vitest'
 
 import {
+  defaultFallbacks,
   getFallbackSources,
   getImageUrl,
   getPathValue,
@@ -8,7 +9,9 @@ import {
   hasFallbackValue,
   type NormalizedSource,
   resolveFallback,
+  splitDocumentQuery,
 } from './fallbacks'
+import {shopifyProduct} from './presets'
 
 const GLOBAL_IMAGE = {query: '*[_id == "preferences"][0].seo.image', label: 'Preferences'}
 
@@ -16,7 +19,12 @@ describe('getFallbackSources', () => {
   it('reads title and description from the document by default', () => {
     expect(
       getFallbackSources('title', undefined, undefined).map((s) => s.kind === 'path' && s.path),
-    ).toEqual(['title', 'name', 'store.title'])
+    ).toEqual(['title', 'name'])
+    expect(
+      getFallbackSources('description', undefined, undefined).map(
+        (s) => s.kind === 'path' && s.path,
+      ),
+    ).toEqual(['description'])
     expect(getFallbackSources('image', undefined, undefined)).toEqual([])
   })
 
@@ -43,7 +51,20 @@ describe('getFallbackSources', () => {
   })
 
   it('keeps the document defaults when the field only sets another field', () => {
-    expect(getFallbackSources('title', {image: 'mainImage'}, undefined)).toHaveLength(3)
+    expect(getFallbackSources('title', {image: 'mainImage'}, undefined)).toHaveLength(2)
+  })
+
+  it('extends the defaults with defaultFallbacks, as the Shopify preset does', () => {
+    expect(
+      getFallbackSources('title', {title: [...defaultFallbacks.title, 'headline']}, undefined).map(
+        (s) => s.kind === 'path' && s.path,
+      ),
+    ).toEqual(['title', 'name', 'headline'])
+    expect(
+      getFallbackSources('description', shopifyProduct.fallbacks, undefined).map(
+        (s) => s.kind === 'path' && s.path,
+      ),
+    ).toEqual(['description', 'store.descriptionHtml'])
   })
 
   it('drops sources it cannot use', () => {
@@ -122,5 +143,27 @@ describe('getImageUrl', () => {
     expect(getImageUrl('not a url', project)).toBeUndefined()
     expect(getImageUrl({asset: {_ref: 'file-abc-pdf'}}, project)).toBeUndefined()
     expect(getImageUrl({asset: {_ref: 'image-abc-10x10-png'}}, {})).toBeUndefined()
+  })
+})
+
+describe('splitDocumentQuery', () => {
+  it('splits a document query from the field path it reads', () => {
+    expect(splitDocumentQuery('*[_type == "preferences"][0].seo.image')).toEqual({
+      documentQuery: '*[_type == "preferences"][0]',
+      path: 'seo.image',
+    })
+    expect(splitDocumentQuery(' *[_id == $id][0] . image ')).toEqual({
+      documentQuery: '*[_id == $id][0]',
+      path: 'image',
+    })
+  })
+
+  it('leaves other queries alone', () => {
+    expect(splitDocumentQuery('*[_type == "preferences"][0]')).toBeUndefined()
+    expect(
+      splitDocumentQuery('coalesce(*[_id == "a"][0].image, *[_id == "b"][0].image)'),
+    ).toBeUndefined()
+    expect(splitDocumentQuery('*[_type == "settings"][0].images[0].asset')).toBeUndefined()
+    expect(splitDocumentQuery('"static"')).toBeUndefined()
   })
 })

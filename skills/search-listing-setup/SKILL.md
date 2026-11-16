@@ -94,10 +94,15 @@ Do not hide or change `store.slug` on Shopify types. Make their `seo` field `rea
 When a listing field is empty, the Studio shows a fallback in its place. Mirror exactly what the frontend will use, so the preview never promises something the site does not render.
 
 ```ts
-// Shopify product: its featured image
-options: {pathPrefix: '/products/', fallbacks: {image: {path: 'store.previewImageUrl', label: 'Shopify'}}}
-// Shopify collection
-options: {pathPrefix: '/collections/', fallbacks: {image: {path: 'store.imageUrl', label: 'Shopify'}}}
+import {defaultFallbacks, shopifyCollection, shopifyProduct} from 'sanity-plugin-search-listing'
+
+// Sanity Connect product / collection: title, description, image, URL and price from `store`
+options: {pathPrefix: '/products/', ...shopifyProduct}
+options: {pathPrefix: '/collections/', ...shopifyCollection}
+// The settings document holding the site's own listing
+options: {home: true}
+// Extend the defaults rather than replacing them
+options: {pathPrefix: '/blog/', fallbacks: {title: [...defaultFallbacks.title, 'headline'], description: 'excerpt'}}
 // A person: their portrait
 options: {pathPrefix: '/team/', fallbacks: {image: {path: 'portrait', label: 'Portrait'}}}
 // A landing page whose intro copy is the description
@@ -108,10 +113,12 @@ Rules:
 
 - A source is a document path (`'portrait'` or `{path, label}`) or a live GROQ query (`{query, params?, label?}`, given `$id`, `$draftId`, `$type`).
 - Order: the field's sources, then the plugin's.
-- Without field fallbacks, `title` reads `title`, `name`, `store.title`, and `description` reads `description`, `store.descriptionHtml`, `body`. Setting `title` or `description` on a field **replaces** these; `[]` turns them off.
+- Without field fallbacks, `title` reads `title`, `name`, and `description` reads `description`. Nothing reads `store.*` or `body` unless configured. Setting `title` or `description` on a field **replaces** these; extend with `defaultFallbacks`; `[]` turns them off.
+- **Sanity Connect** (a `store` object with `gid`, `title`, `descriptionHtml`, `slug`, `previewImageUrl`/`imageUrl`): always use `shopifyProduct` / `shopifyCollection`, never hand-written `store.*` paths. They also set the URL source (`store.title`, `store.slug`) and the price line.
+- Other options: `home: true` for the site's own listing (no handle, host as URL, 320-character description); `maxLength: {title, description}`; `slug: {source, current}` when the URL comes from fields other than `title`/`name` and `slug`.
 - Image values may be a Sanity image, an image asset, or a URL.
 
-Check the real field names before writing a path: `previewImageUrl` and `imageUrl` are Sanity Connect's names; other sync tools differ.
+Check the real field names before writing a path: other sync tools than Sanity Connect name them differently, and then the presets do not apply.
 
 ## 4. Migrating an existing project
 

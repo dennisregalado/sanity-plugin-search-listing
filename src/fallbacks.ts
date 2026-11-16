@@ -13,11 +13,26 @@ export type NormalizedSource =
   | {kind: 'path'; path: string; label?: string}
   | {kind: 'query'; query: string; params: Record<string, string>; label?: string}
 
-/** Read from the document itself when a field sets no `fallbacks` of its own. */
-export const DEFAULT_FIELD_FALLBACKS: Required<SearchListingFallbacks> = {
+/**
+ * Read from the document itself when a field sets no `fallbacks` of its own for that part of
+ * the listing. Generic on purpose: a field adds its own by extending these,
+ * `title: [...defaultFallbacks.title, 'headline']`, or uses a preset such as `shopifyProduct`.
+ */
+export const DEFAULT_FIELD_FALLBACKS = {
   image: [],
-  title: ['title', 'name', 'store.title'],
-  description: ['description', 'store.descriptionHtml', 'body'],
+  title: ['title', 'name'],
+  description: ['description'],
+} as const satisfies Required<SearchListingFallbacks>
+
+/** The default fallbacks, to extend in a field's `fallbacks`. */
+export const defaultFallbacks: {
+  image: SearchListingFallbackSource[]
+  title: SearchListingFallbackSource[]
+  description: SearchListingFallbackSource[]
+} = {
+  image: [...DEFAULT_FIELD_FALLBACKS.image],
+  title: [...DEFAULT_FIELD_FALLBACKS.title],
+  description: [...DEFAULT_FIELD_FALLBACKS.description],
 }
 
 /**
@@ -140,4 +155,48 @@ export function getImageUrl(
 function toArray<T>(value: T | T[] | undefined): T[] {
   if (value === undefined) return []
   return Array.isArray(value) ? value : [value]
+}
+
+/**
+ * A query that reads a field of one document, `*[_type == "settings"][0].seo.image`, split
+ * into the query for that document and the field's path in it, so the Studio can link to the
+ * field. `undefined` for any other shape of query.
+ */
+export function splitDocumentQuery(
+  query: string,
+): {documentQuery: string; path: string} | undefined {
+  const trimmed = query.trim()
+  if (!trimmed.startsWith('*')) return undefined
+
+  // The filter: from the first `[` to its matching `]`, skipping brackets inside strings.
+  const open = trimmed.indexOf('[')
+  if (open < 0 || trimmed.slice(1, open).trim()) return undefined
+  let depth = 0
+  let quote = ''
+  let close = -1
+  for (let index = open; index < trimmed.length; index += 1) {
+    const char = trimmed[index]
+    if (quote) {
+      if (char === '\\') index += 1
+      else if (char === quote) quote = ''
+    } else if (char === '"' || char === "'") {
+      quote = char
+    } else if (char === '[') {
+      depth += 1
+    } else if (char === ']') {
+      depth -= 1
+      if (depth === 0) {
+        close = index
+        break
+      }
+    }
+  }
+  if (close < 0) return undefined
+
+  // Then an optional `[n]`, and a plain field path.
+  const match = /^(\s*\[\s*\d+\s*\])?\s*\.\s*([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)$/.exec(
+    trimmed.slice(close + 1),
+  )
+  if (!match) return undefined
+  return {documentQuery: trimmed.slice(0, close + 1) + (match[1]?.trim() ?? ''), path: match[2]}
 }

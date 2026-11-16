@@ -115,6 +115,13 @@ describe('autoSlugEvent', () => {
     expect(() => autoSlugEvent(["page'] || true || ['"])).toThrow()
   })
 
+  test('takes the fields a slug comes from, and validates them', () => {
+    const event = autoSlugEvent(['article'], {source: ['headline', 'title']})
+    expect(event.filter).toContain('defined(coalesce(headline, title))')
+    expect(event.projection).toContain('headline, title, slug{current}')
+    expect(() => autoSlugEvent(['article'], {source: ['title) || true || (x']})).toThrow()
+  })
+
   test('ignores Shopify documents and types without a route', async () => {
     expect(await matchesFilter({_id: 'p', _type: 'product', title: 'Chair'})).toBe(false)
     expect(await matchesFilter({_id: 's', _type: 'showroom', title: 'LA'})).toBe(false)

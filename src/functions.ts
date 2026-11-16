@@ -5,13 +5,16 @@
  * `sanity.blueprint.ts`.
  */
 import {
+  DEFAULT_SLUG_SOURCE,
   getCanonicalDocumentId,
+  getPathsProjection,
+  getSlugCandidatesQuery,
   getSlugCurrent,
   isSlugTaken,
   resolveAvailableSlug,
-  SLUG_CANDIDATES_QUERY,
   type SlugDocument,
   slugify,
+  type SlugOptions,
 } from './resolveSlug'
 
 /* -------------------------------------------------------------------------- */
@@ -76,11 +79,16 @@ function typeList(types: readonly string[]): string {
  */
 export function autoSlugEvent(
   types: readonly string[],
+  /** The fields a slug is derived from, as in the Studio's `slug.source` option. */
+  slug?: Pick<SlugOptions, 'source'>,
 ): DocumentFunctionEvent<'create' | 'update'> {
+  const source = slug?.source?.length ? slug.source : DEFAULT_SLUG_SOURCE
+  // Validates the paths too, before they reach the filter.
+  const sourceProjection = getPathsProjection(source)
   return {
     on: ['create', 'update'] as Array<'create' | 'update'>,
-    filter: `_type in ${typeList(types)} && ((defined(seo.url.current) && seo.url.current != slug.current) || (!defined(seo.url.current) && !defined(slug.current) && defined(coalesce(title, name))))`,
-    projection: '{_id, _createdAt, _type, title, name, slug{current}, seo{url{current}}}',
+    filter: `_type in ${typeList(types)} && ((defined(seo.url.current) && seo.url.current != slug.current) || (!defined(seo.url.current) && !defined(slug.current) && defined(coalesce(${source.join(', ')}))))`,
+    projection: `{_id, _createdAt, _type, ${sourceProjection}, slug{current}, seo{url{current}}}`,
   }
 }
 
@@ -115,6 +123,8 @@ export type SyncSlugResult =
 export async function syncSlug(
   client: FunctionClient,
   document: SlugDocument,
+  /** The fields a slug is derived from; pass the same `source` as to `autoSlugEvent`. */
+  slug?: Pick<SlugOptions, 'source'>,
 ): Promise<SyncSlugResult> {
   const documentId = typeof document._id === 'string' ? document._id : ''
   const documentType = typeof document._type === 'string' ? document._type : ''
@@ -138,17 +148,19 @@ export async function syncSlug(
     return skip(`${documentId} is already in sync at ${handle}`)
   }
 
-  const documents: SlugDocument[] = await client.fetch(SLUG_CANDIDATES_QUERY, {type: documentType})
+  const documents: SlugDocument[] = await client.fetch(getSlugCandidatesQuery(slug), {
+    type: documentType,
+  })
 
-  if (handle && isSlugTaken(handle, document, documents)) {
+  if (handle && isSlugTaken(handle, document, documents, slug)) {
     // Leave the live URL alone rather than route two documents to one path.
     console.error(`${documentId} wants ${handle}, which another ${documentType} already uses`)
     return {status: 'refused', slug: handle}
   }
 
-  const slug = handle || resolveAvailableSlug(document, documents)
+  const nextSlug = handle || resolveAvailableSlug(document, documents, slug)
 
-  if (!slug) return skip(`${documentId} has no title to derive a slug from`)
+  if (!nextSlug) return skip(`${documentId} has no title to derive a slug from`)
 
   const draftId = `drafts.${getCanonicalDocumentId(documentId)}`
   const draft: {seoUrl: string | null} | null = await client.fetch(
@@ -161,21 +173,21 @@ export async function syncSlug(
       .setIfMissing({seo: {_type: 'seo'}})
       .setIfMissing({'seo.url': {_type: 'slug'}})
       .setIfMissing({slug: {_type: 'slug'}})
-      .set({'seo.url.current': slug, 'slug.current': slug}),
+      .set({'seo.url.current': nextSlug, 'slug.current': nextSlug}),
   )
 
   // A draft opened before this ran still holds the old slug and would restore it on the
   // next publish. Its routing slug follows; a handle the editor has since typed is kept.
   if (draft && documentId !== draftId) {
     transaction.patch(draftId, (patch) => {
-      const next = patch.setIfMissing({slug: {_type: 'slug'}}).set({'slug.current': slug})
+      const next = patch.setIfMissing({slug: {_type: 'slug'}}).set({'slug.current': nextSlug})
 
       if (draft.seoUrl && draft.seoUrl !== seoUrl) return next
 
       return next
         .setIfMissing({seo: {_type: 'seo'}})
         .setIfMissing({'seo.url': {_type: 'slug'}})
-        .set({'seo.url.current': slug})
+        .set({'seo.url.current': nextSlug})
     })
   }
 
@@ -183,9 +195,9 @@ export async function syncSlug(
 
   const source = seoUrl ? 'handle' : 'title'
   console.log(
-    `${documentId}: ${source === 'handle' ? 'synced slug to the URL handle' : 'set slug from the title'} (${slug})`,
+    `${documentId}: ${source === 'handle' ? 'synced slug to the URL handle' : 'set slug from the title'} (${nextSlug})`,
   )
-  return {status: 'updated', slug, source}
+  return {status: 'updated', slug: nextSlug, source}
 }
 
 function skip(reason: string): SyncSlugResult {
