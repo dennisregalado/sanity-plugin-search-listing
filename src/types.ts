@@ -37,6 +37,14 @@ export interface SearchListingPluginOptions {
    * site-wide defaults, such as a sharing image set in a settings document.
    */
   fallbacks?: SearchListingFallbacks
+  /**
+   * Duplicating a document with an `seo` field leaves out its URL handle and routing slug and
+   * appends `titleSuffix` to its title, so "Homepage" is copied as "Homepage Copy" at
+   * `homepage-copy` instead of claiming the original's URL. `false` keeps the Studio's
+   * default Duplicate; `omit` names the routing slug fields; `titleSuffix: false` keeps the title.
+   * @defaultValue `true` (omits `slug`, appends `' Copy'`)
+   */
+  duplicate?: boolean | {omit?: string[]; titleSuffix?: string | false}
 }
 
 export type SearchListingValue = {

@@ -1,7 +1,6 @@
 import { createClient } from '@sanity/client';
 import { documentEventHandler } from '@sanity/functions';
-import type { SlugDocument } from 'sanity-plugin-search-listing/slug';
-import { syncSlug } from './sync';
+import { syncSlug, type SlugDocument } from 'sanity-plugin-search-listing/functions';
 
 export const handler = documentEventHandler(async ({ context, event }) => {
 	const client = createClient({

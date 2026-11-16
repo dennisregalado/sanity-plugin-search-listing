@@ -9,6 +9,9 @@ export default defineConfig({
       'sanity-plugin-search-listing/slug': fileURLToPath(
         new URL('./src/exports/slug.ts', import.meta.url),
       ),
+      'sanity-plugin-search-listing/functions': fileURLToPath(
+        new URL('./src/exports/functions.ts', import.meta.url),
+      ),
     },
   },
   test: {

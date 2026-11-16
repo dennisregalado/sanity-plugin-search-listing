@@ -14,6 +14,11 @@ export default defineConfig({
       import: './dist/slug.js',
       default: './dist/slug.js',
     },
+    './functions': {
+      source: './src/exports/functions.ts',
+      import: './dist/functions.js',
+      default: './dist/functions.js',
+    },
   },
 
   // Remove this block to enable strict export validation

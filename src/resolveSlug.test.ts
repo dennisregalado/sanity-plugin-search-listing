@@ -84,7 +84,7 @@ describe('resolveAvailableSlug', () => {
     expect(resolveAvailableSlug(page('a', '2026-01-01'), [])).toBe('')
   })
 
-  it('hands out base, -copy, -copy-2 in creation order', () => {
+  it('hands out base, -2, -3 in creation order', () => {
     const documents = [
       page('c', '2026-01-03', {title}),
       page('a', '2026-01-01', {title}),
@@ -95,10 +95,10 @@ describe('resolveAvailableSlug', () => {
     expect(
       documents.map((document) => [document._id, resolveAvailableSlug(document, documents)]),
     ).toEqual([
-      ['c', 'very-cool-function-copy-2'],
+      ['c', 'very-cool-function-3'],
       ['a', 'very-cool-function'],
-      ['b', 'very-cool-function-copy'],
-      ['d', 'very-cool-function-copy-3'],
+      ['b', 'very-cool-function-2'],
+      ['d', 'very-cool-function-4'],
     ])
   })
 
@@ -106,13 +106,13 @@ describe('resolveAvailableSlug', () => {
     const documents = [
       page('owner', '2026-02-01', {slug: {current: 'very-cool-function'}}),
       page('handle', '2026-02-02', {
-        seo: {url: {current: 'very-cool-function-copy'}},
+        seo: {url: {current: 'very-cool-function-2'}},
         slug: {current: 'old-route'},
       }),
       page('new', '2026-02-03', {title}),
     ]
 
-    expect(resolveAvailableSlug(documents[2], documents)).toBe('very-cool-function-copy-2')
+    expect(resolveAvailableSlug(documents[2], documents)).toBe('very-cool-function-3')
   })
 
   it('treats a draft and its published document as one', () => {
@@ -127,21 +127,21 @@ describe('resolveAvailableSlug', () => {
 
     // `a` was created first, so it takes the base slug once retitled.
     expect(resolveAvailableSlug(current, stored)).toBe('very-cool-function')
-    expect(resolveAvailableSlug(stored[1], [...stored, current])).toBe('very-cool-function-copy')
+    expect(resolveAvailableSlug(stored[1], [...stored, current])).toBe('very-cool-function-2')
   })
 
   it('lets saved documents go before one that has not been saved yet', () => {
     const documents = [page('saved', '2026-01-01', {title})]
 
     expect(resolveAvailableSlug({_id: 'drafts.unsaved', _type: 'page', title}, documents)).toBe(
-      'very-cool-function-copy',
+      'very-cool-function-2',
     )
   })
 
   it('breaks creation-time ties by document id', () => {
     const documents = [page('b', '2026-01-01', {title}), page('a', '2026-01-01', {title})]
 
-    expect(resolveAvailableSlug(documents[0], documents)).toBe('very-cool-function-copy')
+    expect(resolveAvailableSlug(documents[0], documents)).toBe('very-cool-function-2')
   })
 })
 

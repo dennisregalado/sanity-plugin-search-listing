@@ -64,12 +64,28 @@ import {searchListing} from 'sanity-plugin-search-listing'
 export default defineConfig({
   // ...
   plugins: [
+    structureTool(),
+    // After structureTool(): it adds the Duplicate action this plugin wraps.
     searchListing({
       siteName: 'Your Site Name',
     }),
   ],
 })
 ```
+
+### Duplicating documents
+
+Duplicating a document that has an `seo` field appends " Copy" to its title and leaves out its URL handle (`seo.url`) and routing `slug`, so the copy never claims the original's URL. Its URL follows from the new title, and [`auto-slug`](#persisting-the-slug) saves it when the copy is published. Everything else is copied.
+
+| Duplicate       | Title         | URL               |
+| --------------- | ------------- | ----------------- |
+| Homepage        | Homepage Copy | `homepage-copy`   |
+| Homepage, again | Homepage Copy | `homepage-copy-2` |
+| Homepage Copy   | Homepage Copy | `homepage-copy-3` |
+
+A title that already ends in " Copy" is left alone. The suffix goes on `title`, or on `name` for types without one.
+
+Register the plugin after `structureTool()`. Listed before it, the plugin cannot see the Duplicate action and logs a warning in the browser console. To keep the Studio's own Duplicate, pass `duplicate: false`. If your routing slug field is not called `slug`, name it: `duplicate: {omit: ['path']}`. Change or drop the title suffix with `duplicate: {titleSuffix: ' (copy)'}` or `titleSuffix: false`.
 
 Use the `seo` type anywhere in your schema:
 
@@ -251,7 +267,48 @@ Using this entry keeps the saved slug identical to the one the editor was shown.
 
 - An explicit slug always wins, in this order: `seo.url.current`, `slug.current`, `store.slug.current`.
 - Otherwise the slug is derived from `title`, then `name`, then `store.title`.
-- Documents with the same derived slug take `base`, `base-copy`, `base-copy-2`, and so on, in `_createdAt` order, skipping any slug another document already owns.
+- Documents with the same derived slug take `base`, `base-2`, `base-3`, and so on, in `_createdAt` order, skipping any slug another document already owns.
 - The draft and published copies of a document count as one document. Release versions are ignored.
 
-The entry also exports `slugify`, `isValidUrlHandle`, `isSlugTaken`, `getDocumentSlug` and `getTitleSlug`.
+The entry also exports `slugify`, `isValidUrlHandle`, `isSlugTaken`, `getDocumentSlug`, `getTitleSlug` and `prepareDuplicate` / `omitUrlHandle` (the duplicate guard's mapping, for your own copy flows).
+
+### Sanity Functions
+
+`sanity-plugin-search-listing/functions` has the two Functions' logic and their Blueprint events, so a project only lists its routed types:
+
+```ts
+// sanity.blueprint.ts
+import {autoRedirectEvent, autoSlugEvent} from 'sanity-plugin-search-listing/functions'
+
+const SLUG_TYPES = ['page', 'post'] // routed by slug.current; never Shopify types
+
+defineDocumentFunction({
+  name: 'auto-slug',
+  src: './functions/auto-slug',
+  event: autoSlugEvent(SLUG_TYPES),
+})
+defineDocumentFunction({
+  name: 'auto-redirect',
+  src: './functions/auto-redirect',
+  event: autoRedirectEvent(SLUG_TYPES),
+})
+```
+
+```ts
+// functions/auto-slug/index.ts
+import {createClient} from '@sanity/client'
+import {documentEventHandler} from '@sanity/functions'
+import {syncSlug, type SlugDocument} from 'sanity-plugin-search-listing/functions'
+
+export const handler = documentEventHandler(async ({context, event}) => {
+  const client = createClient({
+    ...context.clientOptions,
+    useCdn: false,
+    apiVersion: '2025-05-08',
+    perspective: 'raw',
+  })
+  await syncSlug(client, event.data as SlugDocument)
+})
+```
+
+`auto-redirect` is the same with `syncRedirects(client, {page: '/pages/', post: '/blog/'}, event.data)` and `perspective: 'published'`. The `search-listing-functions` agent skill has the full setup, the redirect schema and the frontend lookup.
