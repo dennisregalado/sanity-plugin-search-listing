@@ -53,6 +53,10 @@ A skill you edit locally is kept on the next sync (`--force` replaces it). `npx 
 npm install sanity-plugin-search-listing
 ```
 
+The Studio plugin requires Sanity 6. It uses the Studio's own `@sanity/ui` (4) and `@sanity/icons` (5), which `sanity` already installs, so they are peer dependencies rather than bundled copies. For Sanity 5, stay on 1.3.x.
+
+The `/slug` and `/functions` entries need none of these: `sanity`, `react`, `@sanity/ui` and `@sanity/icons` are optional peers, so a Sanity Function can install the package without a Studio.
+
 ## Usage
 
 Add the plugin to `sanity.config.ts`:
