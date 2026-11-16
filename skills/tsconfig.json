@@ -2,8 +2,21 @@
   "extends": "../tsconfig.settings",
   "compilerOptions": {
     "rootDir": "..",
-    "types": ["node"],
-    "paths": {"sanity-plugin-search-listing/slug": ["../src/exports/slug.ts"]}
+    "types": [
+      "node"
+    ],
+    "paths": {
+      "sanity-plugin-search-listing/slug": [
+        "../src/exports/slug.ts"
+      ],
+      "sanity-plugin-search-listing/functions": [
+        "../src/exports/functions.ts"
+      ]
+    }
   },
-  "include": ["**/sync.ts", "**/plan.ts", "**/redirect-lookup.ts", "**/seo.ts", "**/*.test.ts"]
+  "include": [
+    "**/redirect-lookup.ts",
+    "**/seo.ts",
+    "**/*.test.ts"
+  ]
 }

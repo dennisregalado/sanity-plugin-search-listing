@@ -18,24 +18,26 @@ Do `search-listing-setup` first. You need its inventory: routed types and their 
 
 ## Files
 
-Copy from `references/` into the project, then edit the two marked lists:
+The logic ships in `sanity-plugin-search-listing/functions`: `syncSlug`, `syncRedirects`, and the Blueprint events `autoSlugEvent(types)` / `autoRedirectEvent(types)`. A project's Functions are thin handlers around them. Copy from `references/` into the project, then edit the two marked lists:
 
-| Reference                         | Destination                                   |
-| --------------------------------- | --------------------------------------------- |
-| `auto-slug/index.ts`, `sync.ts`   | `functions/auto-slug/`                        |
-| `auto-redirect/index.ts`, `plan.ts` | `functions/auto-redirect/`                  |
-| `blueprint.ts`                    | merge into `sanity.blueprint.ts`              |
-| `redirect-schema.ts`              | the schema, if there is no `redirect` type    |
-| `redirect-lookup.ts`              | the frontend's 404 handling                   |
+| Reference                 | Destination                                |
+| ------------------------- | ------------------------------------------ |
+| `auto-slug/index.ts`      | `functions/auto-slug/`                     |
+| `auto-redirect/index.ts`  | `functions/auto-redirect/`                 |
+| `blueprint.ts`            | merge into `sanity.blueprint.ts`           |
+| `redirect-schema.ts`      | the schema, if there is no `redirect` type |
+| `redirect-lookup.ts`      | the frontend's 404 handling                |
 
 Edit:
 
 1. `SLUG_TYPES` in the Blueprint: the routed types. Never Shopify types.
-2. `ROUTE_PREFIXES` in `auto-redirect/plan.ts`: the same types, each with its `pathPrefix`.
+2. `ROUTE_PREFIXES` in `auto-redirect/index.ts`: the same types, each with its `pathPrefix`.
 
-Each function needs its own `package.json` with `@sanity/client`, `@sanity/functions`, and for auto-slug `sanity-plugin-search-listing`. Install each function's dependencies inside its folder: the Functions bundler uses the nearest `node_modules`, and without one it picks up the app's build config.
+Each function needs its own `package.json` with `@sanity/client`, `@sanity/functions` and `sanity-plugin-search-listing`. Install each function's dependencies inside its folder: the Functions bundler uses the nearest `node_modules`, and without one it picks up the app's build config. Keep the Functions' plugin version in step with the Studio's.
 
-`auto-slug` imports the slug rules from `sanity-plugin-search-listing/slug`, the same code the Studio preview runs, so the saved slug is always the one the editor saw. Never reimplement `slugify` or the duplicate rules.
+Never reimplement `slugify`, the duplicate rules or the filters: the Studio preview runs the same code, so the saved slug is always the one the editor saw.
+
+**Duplicates.** The plugin's Duplicate action (registered after `structureTool()`) leaves out `seo.url` and `slug`, so the copy matches the `autoSlugEvent` filter (no handle, no slug) and gets `<title-slug>` or `<title-slug>-copy` when published. A copy made another way that kept the original's handle is never invoked, and the Studio's uniqueness check blocks publishing it.
 
 ## Behaviour to preserve
 
@@ -68,7 +70,7 @@ These are deliberate. Keep them when adapting the code.
 
 ## Test
 
-Unit-test the redirect rules (`plan.ts`) and run `syncSlug` against an in-memory dataset: evaluate the function's GROQ with `groq-js`, apply patches to plain objects, and check the Blueprint filter too, by evaluating `*[<filter>]` against the document. Cover: new document, duplicate titles, handle change, handle normalization, taken handle, legacy slug, stale draft publish, open draft.
+The plugin's own suite covers `syncSlug`, `syncRedirects` and the events against an in-memory dataset. In the project, check that the Blueprint uses `autoSlugEvent` / `autoRedirectEvent` with the routed types, and that `ROUTE_PREFIXES` matches them. To test the whole flow, duplicate a document in the Studio, publish it, and read `npx sanity functions logs auto-slug`.
 
 Sanity's local runner can execute auto-slug:
 
