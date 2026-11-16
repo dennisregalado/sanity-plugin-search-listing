@@ -60,13 +60,6 @@ type StudioFormDocument = {
   _createdAt?: unknown
   _id?: unknown
   _type?: unknown
-  seo?: {
-    description?: unknown
-    title?: unknown
-    url?: {
-      current?: unknown
-    } | null
-  } | null
   [field: string]: unknown
 }
 
@@ -431,7 +424,7 @@ function SearchListingInput(props: SearchListingInputProps) {
                     </Tooltip>
                   </Box>
                   {imageField}
-                  <SearchListingPreview />
+                  <SearchListingPreview value={props.value} />
                   {isEditing &&
                     props.renderDefault({
                       ...props,
@@ -447,7 +440,11 @@ function SearchListingInput(props: SearchListingInputProps) {
   )
 }
 
-function SearchListingPreview() {
+/**
+ * The listing as a search engine shows it. `value` is this field's own value, so the preview
+ * works for a field of any name, at any depth; the document is read for the price only.
+ */
+function SearchListingPreview({value}: {value: Record<string, unknown> | undefined}) {
   const document = useFormValue([]) as StudioFormDocument
   const workspace = useWorkspace()
   const siteName = React.useContext(SiteNameContext)
@@ -460,9 +457,9 @@ function SearchListingPreview() {
     : getPathBreadcrumbSegments(pathPrefix, hasHandle ? slugFallback : '')
 
   const fallbacks = React.useContext(FallbacksContext)
-  const title = getFieldText(document?.seo?.title) || getFieldText(fallbacks.title?.value)
+  const title = getFieldText(value?.title) || getFieldText(fallbacks.title?.value)
   const descriptionText =
-    getFieldText(document?.seo?.description) || getFieldText(fallbacks.description?.value)
+    getFieldText(value?.description) || getFieldText(fallbacks.description?.value)
   const description = clipText(descriptionText, options.maxLength.description)
   const price = options.price
     ? getPricePreview(getPathValue(document, options.price.path), options.price.currency)
