@@ -17,7 +17,7 @@ The plugin only stores data and previews it. The frontend has to apply the **sam
 For each field, the first value with content wins:
 
 1. The document's `seo` value (`seo.title`, `seo.description`, `seo.image`).
-2. The field's own fallbacks (the `fallbacks` option on that type's `seo` field). Without any, `title` uses `title`/`name`/`store.title` and `description` uses `description`/`store.descriptionHtml`/`body`.
+2. The field's own fallbacks (the `fallbacks` option on that type's `seo` field). Without any, `title` uses `title`/`name` and `description` uses `description`. A Sanity Connect field spreading `shopifyProduct` / `shopifyCollection` uses `store.title`, `store.descriptionHtml` and the `store` image instead.
 3. The plugin-level fallbacks (`searchListing({fallbacks})`), typically the site-wide settings document.
 
 Before coding, read `sanity.config.ts` and every `seo` field's `options.fallbacks`, and write the order down per route.

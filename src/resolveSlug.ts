@@ -4,7 +4,7 @@
  * import from `sanity-plugin-search-listing/slug` in a server runtime.
  */
 
-/** The fields of a document the slug rules read. */
+/** The fields of a document the slug rules read: the defaults, plus any configured paths. */
 export type SlugDocument = {
   _createdAt?: unknown
   _id?: unknown
@@ -12,32 +12,85 @@ export type SlugDocument = {
   title?: unknown
   name?: unknown
   slug?: {current?: unknown} | null
-  store?: {
-    title?: unknown
-    slug?: {current?: unknown} | null
-  } | null
   seo?: {
     url?: {current?: unknown} | null
   } | null
+  [field: string]: unknown
+}
+
+/**
+ * Where a type's slug comes from, as dot paths on the document. The defaults suit documents
+ * routed by their own `slug`; a Sanity Connect product or collection uses
+ * `{source: ['store.title'], current: ['store.slug']}` (see the `shopifyProduct` preset).
+ */
+export interface SlugOptions {
+  /** Fields a slug is derived from, tried in order. @defaultValue `['title', 'name']` */
+  source?: string[]
+  /**
+   * Slug fields (`{current}` objects) a document may already route on. Its URL handle,
+   * `seo.url`, always comes first. @defaultValue `['slug']`
+   */
+  current?: string[]
+}
+
+export const DEFAULT_SLUG_SOURCE = ['title', 'name']
+export const DEFAULT_SLUG_CURRENT = ['slug']
+
+function getSourcePaths(options?: SlugOptions): string[] {
+  return options?.source?.length ? options.source : DEFAULT_SLUG_SOURCE
+}
+
+function getCurrentPaths(options?: SlugOptions): string[] {
+  return options?.current?.length ? options.current : DEFAULT_SLUG_CURRENT
+}
+
+const FIELD_PATH_PATTERN = /^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*$/
+
+/**
+ * A GROQ projection of the given dot paths, nested: `['store.title', 'store.slug']` becomes
+ * `store{title, slug}`.
+ */
+export function getPathsProjection(paths: string[]): string {
+  type Tree = Map<string, Tree>
+  const tree: Tree = new Map()
+  for (const path of paths) {
+    if (!FIELD_PATH_PATTERN.test(path)) throw new Error(`Not a field path: ${path}`)
+    let node = tree
+    for (const key of path.split('.')) {
+      if (!node.has(key)) node.set(key, new Map())
+      node = node.get(key)!
+    }
+  }
+  const render = (node: Tree): string =>
+    [...node.entries()]
+      .map(([key, children]) => (children.size ? `${key}{${render(children)}}` : key))
+      .join(', ')
+  return render(tree)
 }
 
 /**
  * Every document of one type that can own or reserve a slug. Run it with the `raw`
  * perspective so drafts are included; release versions are left out.
  */
-export const SLUG_CANDIDATES_QUERY = `*[
+export function getSlugCandidatesQuery(options?: SlugOptions): string {
+  const fields = getPathsProjection([
+    ...getSourcePaths(options),
+    ...getCurrentPaths(options).map((path) => `${path}.current`),
+    'seo.url.current',
+  ])
+  return `*[
   _type == $type &&
   !(_id in path("versions.**"))
 ]{
   _id,
   _createdAt,
   _type,
-  title,
-  name,
-  slug{current},
-  store{title, slug{current}},
-  seo{url{current}}
+  ${fields}
 }`
+}
+
+/** `getSlugCandidatesQuery()` with the default slug fields. */
+export const SLUG_CANDIDATES_QUERY = getSlugCandidatesQuery()
 
 /** A URL handle: lowercase letters and digits in hyphen-separated groups. */
 export const URL_HANDLE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
@@ -56,27 +109,34 @@ export function slugify(value: string): string {
     .replace(/^-+|-+$/g, '')
 }
 
-/** The text a document's slug is derived from: `title`, then `name`, then `store.title`. */
-export function getSlugSourceText(document: SlugDocument | null | undefined): string {
+/** The text a document's slug is derived from: the first `source` field with text. */
+export function getSlugSourceText(
+  document: SlugDocument | null | undefined,
+  options?: SlugOptions,
+): string {
   if (!document) return ''
-  return (
-    toPlainText(document.title) || toPlainText(document.name) || toPlainText(document.store?.title)
-  )
+  for (const path of getSourcePaths(options)) {
+    const text = toPlainText(getPath(document, path))
+    if (text) return text
+  }
+  return ''
 }
 
 /** The slug a document's title would produce, before duplicates are resolved. */
-export function getTitleSlug(document: SlugDocument | null | undefined): string {
-  return slugify(getSlugSourceText(document))
+export function getTitleSlug(
+  document: SlugDocument | null | undefined,
+  options?: SlugOptions,
+): string {
+  return slugify(getSlugSourceText(document, options))
 }
 
-/** The slug a document already owns: `seo.url`, then `slug`, then `store.slug`. */
-export function getDocumentSlug(document: SlugDocument | null | undefined): string {
+/** The slug a document already owns: `seo.url`, then each `current` field. */
+export function getDocumentSlug(
+  document: SlugDocument | null | undefined,
+  options?: SlugOptions,
+): string {
   if (!document) return ''
-  return (
-    getSlugCurrent(document.seo?.url) ||
-    getSlugCurrent(document.slug) ||
-    getSlugCurrent(document.store?.slug)
-  )
+  return getOwnedSlugs(document, options)[0] ?? ''
 }
 
 export function getSlugCurrent(value: unknown): string {
@@ -100,6 +160,7 @@ export function getCanonicalDocumentId(id: unknown): string {
 export function resolveAvailableSlug(
   currentDocument: SlugDocument,
   documents: SlugDocument[],
+  options?: SlugOptions,
 ): string {
   const currentKey = getCanonicalDocumentId(currentDocument._id)
   const documentsByKey = new Map<string, SlugDocument>()
@@ -119,22 +180,25 @@ export function resolveAvailableSlug(
 
   const mergedDocuments = [...documentsByKey.values()]
   const current = (currentKey && documentsByKey.get(currentKey)) || currentDocument
-  const explicitSlug = getDocumentSlug(current)
+  const explicitSlug = getDocumentSlug(current, options)
 
   if (explicitSlug) return explicitSlug
 
-  const titleSlug = getTitleSlug(current)
+  const titleSlug = getTitleSlug(current, options)
 
   if (!titleSlug) return ''
 
   const usedSlugs = new Set(
     mergedDocuments
       .filter((document) => getCanonicalDocumentId(document._id) !== currentKey)
-      .flatMap(getOwnedSlugs),
+      .flatMap((document) => getOwnedSlugs(document, options)),
   )
 
   const implicitDocuments = mergedDocuments
-    .filter((document) => !getDocumentSlug(document) && getTitleSlug(document) === titleSlug)
+    .filter(
+      (document) =>
+        !getDocumentSlug(document, options) && getTitleSlug(document, options) === titleSlug,
+    )
     .sort(compareCandidateDocuments)
 
   for (const document of implicitDocuments) {
@@ -154,22 +218,33 @@ export function isSlugTaken(
   slug: string,
   currentDocument: SlugDocument,
   documents: SlugDocument[],
+  options?: SlugOptions,
 ): boolean {
   const currentKey = getCanonicalDocumentId(currentDocument._id)
 
   return documents.some(
     (document) =>
-      getCanonicalDocumentId(document._id) !== currentKey && getOwnedSlugs(document).includes(slug),
+      getCanonicalDocumentId(document._id) !== currentKey &&
+      getOwnedSlugs(document, options).includes(slug),
   )
 }
 
 /** Every slug a document holds, so a handle never collides with a routing slug either. */
-function getOwnedSlugs(document: SlugDocument): string[] {
+function getOwnedSlugs(document: SlugDocument, options?: SlugOptions): string[] {
   return [
     getSlugCurrent(document.seo?.url),
-    getSlugCurrent(document.slug),
-    getSlugCurrent(document.store?.slug),
+    ...getCurrentPaths(options).map((path) => getSlugCurrent(getPath(document, path))),
   ].filter(Boolean)
+}
+
+/** `store.slug` on a plain object. */
+function getPath(document: unknown, path: string): unknown {
+  let value: unknown = document
+  for (const key of path.split('.')) {
+    if (!value || typeof value !== 'object') return undefined
+    value = (value as Record<string, unknown>)[key]
+  }
+  return value
 }
 
 function getNumberedCandidate(base: string, usedSlugs: Set<string>): string {
@@ -192,16 +267,22 @@ function mergeCandidateDocuments(
 ): SlugDocument {
   if (!existing) return incoming
 
-  return {
-    ...existing,
-    ...incoming,
-    _createdAt: getEarlierDate(existing._createdAt, incoming._createdAt),
-    seo: incoming.seo || existing.seo,
-    slug: incoming.slug || existing.slug,
-    store: incoming.store || existing.store ? {...existing.store, ...incoming.store} : undefined,
-    title: incoming.title || existing.title,
-    name: incoming.name || existing.name,
+  // Each field: the incoming copy's value when it has one. Objects (`store`) are merged.
+  const merged: SlugDocument = {...existing}
+  for (const [key, value] of Object.entries(incoming)) {
+    if (value === undefined || value === null || value === '') continue
+    const previous = existing[key]
+    merged[key] =
+      isPlainObject(value) && isPlainObject(previous) && key !== 'seo' && key !== 'slug'
+        ? {...previous, ...value}
+        : value
   }
+  merged._createdAt = getEarlierDate(existing._createdAt, incoming._createdAt)
+  return merged
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
 function compareCandidateDocuments(a: SlugDocument, b: SlugDocument): number {

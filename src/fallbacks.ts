@@ -13,11 +13,26 @@ export type NormalizedSource =
   | {kind: 'path'; path: string; label?: string}
   | {kind: 'query'; query: string; params: Record<string, string>; label?: string}
 
-/** Read from the document itself when a field sets no `fallbacks` of its own. */
-export const DEFAULT_FIELD_FALLBACKS: Required<SearchListingFallbacks> = {
+/**
+ * Read from the document itself when a field sets no `fallbacks` of its own for that part of
+ * the listing. Generic on purpose: a field adds its own by extending these,
+ * `title: [...defaultFallbacks.title, 'headline']`, or uses a preset such as `shopifyProduct`.
+ */
+export const DEFAULT_FIELD_FALLBACKS = {
   image: [],
-  title: ['title', 'name', 'store.title'],
-  description: ['description', 'store.descriptionHtml', 'body'],
+  title: ['title', 'name'],
+  description: ['description'],
+} as const satisfies Required<SearchListingFallbacks>
+
+/** The default fallbacks, to extend in a field's `fallbacks`. */
+export const defaultFallbacks: {
+  image: SearchListingFallbackSource[]
+  title: SearchListingFallbackSource[]
+  description: SearchListingFallbackSource[]
+} = {
+  image: [...DEFAULT_FIELD_FALLBACKS.image],
+  title: [...DEFAULT_FIELD_FALLBACKS.title],
+  description: [...DEFAULT_FIELD_FALLBACKS.description],
 }
 
 /**

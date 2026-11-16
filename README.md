@@ -11,9 +11,9 @@ It registers a single `seo` object type with four fields:
 
 The plugin also adds a compact search listing preview above the editable fields. Editors can see the current title, description, URL, image, and common fallbacks without leaving the document form.
 
-When a document does not have an SEO URL, document slug, or storefront slug yet, the URL handle field shows a visual fallback slugified from the document's `title`, `name`, or `store.title`. This does not save a slug value; it only previews the URL an automatic slug function would create. See [Persisting the slug](#persisting-the-slug).
+When a document does not have an SEO URL or routing slug yet, the URL handle field shows a visual fallback slugified from the document's `title` or `name` (or the fields in the [`slug` option](#field-options)). This does not save a slug value; it only previews the URL an automatic slug function would create. See [Persisting the slug](#persisting-the-slug).
 
-A URL handle the editor types must be lowercase letters, numbers and hyphens, and must not match the `seo.url`, `slug`, or `store.slug` of another document of the same type.
+A URL handle the editor types must be lowercase letters, numbers and hyphens, and must not match the `seo.url` or routing slug (`slug`, or the `slug.current` fields you configure) of another document of the same type.
 
 ## Why this design
 
@@ -113,6 +113,37 @@ export const page = defineType({
 })
 ```
 
+### Field options
+
+Set these as `options` on each `seo` field:
+
+| Option          | What it does                                                                                                                                                                                    |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pathPrefix`    | The route shown before the URL handle, e.g. `'/products/'`. Default `/`.                                                                                                                        |
+| `handle: false` | A document at a fixed URL: no URL handle field; the preview shows `pathPrefix`.                                                                                                                 |
+| `home: true`    | The site's own listing, on a settings or home page document: no URL handle, the preview shows the host, the description may run to 320 characters, and the title field reads "Home page title". |
+| `fallbacks`     | What the listing shows while a field is empty. See [Fallbacks](#fallbacks).                                                                                                                     |
+| `maxLength`     | `{title, description}` lengths past which the listing warns. Default `{title: 70, description: 160}` (320 with `home`).                                                                         |
+| `slug`          | Where the URL comes from when there is no handle: `{source, current}` as dot paths. Default `{source: ['title', 'name'], current: ['slug']}`.                                                   |
+| `preview.price` | A price under the description: a path to a number, or `{path, currency}` (default `USD`).                                                                                                       |
+
+#### Presets: Sanity Connect for Shopify
+
+Sanity Connect keeps a product's data under `store` (`store.title`, `store.descriptionHtml`, `store.slug`, `store.previewImageUrl`, `store.priceRange`). Spread a preset instead of writing those paths:
+
+```ts
+import {shopifyCollection, shopifyProduct} from 'sanity-plugin-search-listing'
+
+defineField({name: 'seo', type: 'seo', options: {pathPrefix: '/products/', ...shopifyProduct}})
+defineField({
+  name: 'seo',
+  type: 'seo',
+  options: {pathPrefix: '/collections/', ...shopifyCollection},
+})
+```
+
+`shopifyProduct` sets the title, description and image fallbacks, `slug: {source: ['store.title'], current: ['store.slug']}` and the price line; `shopifyCollection` the same without a price and with `store.imageUrl`. To change one part, spread it too: `fallbacks: {...shopifyProduct.fallbacks, image: 'mainImage'}`.
+
 Set `options.pathPrefix` on each schema field when a document type needs a route prefix in the preview:
 
 ```ts
@@ -188,11 +219,28 @@ Each of `image`, `title` and `description` takes one source or a list, tried in 
 - A path on the document, as a string (`'store.previewImageUrl'`) or `{path, label}`.
 - A GROQ query, as `{query, params?, label?}`. It receives `$id`, `$draftId` and `$type` for the document being edited, sees drafts, and updates live.
 
-The field's sources are tried before the plugin's. Without field fallbacks, `title` reads `title`, `name`, then `store.title`, and `description` reads `description`, `store.descriptionHtml`, then `body`. Setting `title` or `description` on a field replaces those defaults; an empty list turns them off.
+The field's sources are tried before the plugin's. Without field fallbacks, `title` reads `title`, then `name`, and `description` reads `description`. Setting `title` or `description` on a field replaces those defaults; extend them instead with `defaultFallbacks`, and an empty list turns them off:
+
+```ts
+import {defaultFallbacks} from 'sanity-plugin-search-listing'
+
+options: {fallbacks: {title: [...defaultFallbacks.title, 'headline'], description: 'excerpt'}}
+```
+
+For Shopify documents use the [Sanity Connect presets](#presets-sanity-connect-for-shopify).
+
+While the image is empty and the listing is not in edit mode, its fallback is shown in the image field: a Sanity image through the image input itself (nothing is saved), any other image URL in a box like the input's preview. Hovering it names the source: a fallback from another document (a query such as `*[_type == "settings"][0].seo.image`) opens a popover with that document's preview, linking to the field; one read from the document itself names the field. A title or description fallback is the field's placeholder, clipped to its `maxLength`; the character count only counts what is typed.
 
 An image fallback can be a Sanity image object, an image asset, or an image URL.
 
 Fallbacks are only shown in the Studio; nothing is saved. Apply the same fallbacks where your frontend builds its metadata.
+
+## Migrating to 2.0
+
+- **Sanity 6 only.** `@sanity/ui` 4, `@sanity/icons` 5 and `sanity` 6 are peer dependencies.
+- **No Shopify defaults.** Title, description and slug no longer read `store.title`, `store.descriptionHtml`, `body` or `store.slug` unless configured. Add `...shopifyProduct` / `...shopifyCollection` to Sanity Connect `seo` fields, and `description: 'body'` (or similar) where the body was the description.
+- **`home: true` instead of type names.** The plugin no longer treats `preferences`, `site`, `storefront` or `theme` specially; set `home: true` on that document's `seo` field.
+- **Numbered duplicates.** Same-title slugs are `base-2`, `base-3` (were `base-copy`, `base-copy-2`); saved slugs never change.
 
 ## Stored Value
 
@@ -249,7 +297,7 @@ function resolveMetadata(page: Page) {
 }
 ```
 
-The Studio preview uses similar fallbacks for common fields like `title`, `description`, `body`, and Shopify-style `store` data. Your frontend can keep those rules, simplify them, or replace them completely.
+The Studio preview uses the fallbacks configured on each `seo` field and the plugin. Apply the same order in your frontend; the `search-listing-metadata` agent skill shows how.
 
 ## Persisting the slug
 
@@ -269,8 +317,9 @@ const slug = resolveAvailableSlug(document, documents)
 
 Using this entry keeps the saved slug identical to the one the editor was shown. The rules:
 
-- An explicit slug always wins, in this order: `seo.url.current`, `slug.current`, `store.slug.current`.
-- Otherwise the slug is derived from `title`, then `name`, then `store.title`.
+- An explicit slug always wins, in this order: `seo.url.current`, then each routing slug field (`slug.current` by default).
+- Otherwise the slug is derived from `title`, then `name` (or the `slug.source` paths).
+- Every rule takes the field's `slug` options as its last argument: `resolveAvailableSlug(document, documents, {source: ['store.title'], current: ['store.slug']})`, with `getSlugCandidatesQuery(options)` to fetch the documents.
 - Documents with the same derived slug take `base`, `base-2`, `base-3`, and so on, in `_createdAt` order, skipping any slug another document already owns.
 - The draft and published copies of a document count as one document. Release versions are ignored.
 

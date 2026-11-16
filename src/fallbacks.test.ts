@@ -1,6 +1,7 @@
 import {describe, expect, it} from 'vitest'
 
 import {
+  defaultFallbacks,
   getFallbackSources,
   getImageUrl,
   getPathValue,
@@ -10,6 +11,7 @@ import {
   resolveFallback,
   splitDocumentQuery,
 } from './fallbacks'
+import {shopifyProduct} from './presets'
 
 const GLOBAL_IMAGE = {query: '*[_id == "preferences"][0].seo.image', label: 'Preferences'}
 
@@ -17,7 +19,12 @@ describe('getFallbackSources', () => {
   it('reads title and description from the document by default', () => {
     expect(
       getFallbackSources('title', undefined, undefined).map((s) => s.kind === 'path' && s.path),
-    ).toEqual(['title', 'name', 'store.title'])
+    ).toEqual(['title', 'name'])
+    expect(
+      getFallbackSources('description', undefined, undefined).map(
+        (s) => s.kind === 'path' && s.path,
+      ),
+    ).toEqual(['description'])
     expect(getFallbackSources('image', undefined, undefined)).toEqual([])
   })
 
@@ -44,7 +51,20 @@ describe('getFallbackSources', () => {
   })
 
   it('keeps the document defaults when the field only sets another field', () => {
-    expect(getFallbackSources('title', {image: 'mainImage'}, undefined)).toHaveLength(3)
+    expect(getFallbackSources('title', {image: 'mainImage'}, undefined)).toHaveLength(2)
+  })
+
+  it('extends the defaults with defaultFallbacks, as the Shopify preset does', () => {
+    expect(
+      getFallbackSources('title', {title: [...defaultFallbacks.title, 'headline']}, undefined).map(
+        (s) => s.kind === 'path' && s.path,
+      ),
+    ).toEqual(['title', 'name', 'headline'])
+    expect(
+      getFallbackSources('description', shopifyProduct.fallbacks, undefined).map(
+        (s) => s.kind === 'path' && s.path,
+      ),
+    ).toEqual(['description', 'store.descriptionHtml'])
   })
 
   it('drops sources it cannot use', () => {

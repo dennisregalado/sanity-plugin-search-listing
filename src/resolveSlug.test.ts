@@ -1,8 +1,10 @@
 import {describe, expect, it} from 'vitest'
 
+import {shopifyProduct} from './presets'
 import {
   getCanonicalDocumentId,
   getDocumentSlug,
+  getSlugCandidatesQuery,
   getTitleSlug,
   isSlugTaken,
   isValidUrlHandle,
@@ -40,26 +42,50 @@ describe('isValidUrlHandle', () => {
 })
 
 describe('getTitleSlug', () => {
-  it('reads title, then name, then store.title', () => {
+  it('reads title, then name, by default', () => {
     expect(getTitleSlug({title: 'A Page', name: 'Ignored'})).toBe('a-page')
     expect(getTitleSlug({name: 'Studio Maker'})).toBe('studio-maker')
-    expect(getTitleSlug({store: {title: 'Oak Chair'}})).toBe('oak-chair')
     expect(getTitleSlug({title: '<em>Bold</em> move'})).toBe('bold-move')
+    // No Shopify shape unless asked for.
+    expect(getTitleSlug({store: {title: 'Oak Chair'}})).toBe('')
+  })
+
+  it('reads the configured source paths in order', () => {
+    expect(getTitleSlug({store: {title: 'Oak Chair'}}, shopifyProduct.slug)).toBe('oak-chair')
+    expect(getTitleSlug({title: 'A', headline: 'B'}, {source: ['headline', 'title']})).toBe('b')
   })
 })
 
 describe('getDocumentSlug', () => {
-  it('prefers seo.url, then slug, then store.slug', () => {
-    expect(
-      getDocumentSlug({
-        seo: {url: {current: 'a'}},
-        slug: {current: 'b'},
-        store: {slug: {current: 'c'}},
-      }),
-    ).toBe('a')
+  it('prefers seo.url, then slug, by default', () => {
+    expect(getDocumentSlug({seo: {url: {current: 'a'}}, slug: {current: 'b'}})).toBe('a')
     expect(getDocumentSlug({seo: {url: {}}, slug: {current: 'b'}})).toBe('b')
-    expect(getDocumentSlug({store: {slug: {current: 'c'}}})).toBe('c')
+    expect(getDocumentSlug({store: {slug: {current: 'c'}}})).toBe('')
     expect(getDocumentSlug({})).toBe('')
+  })
+
+  it('reads the configured routing slug fields after seo.url', () => {
+    const product = {store: {slug: {current: 'oak-chair'}}}
+    expect(getDocumentSlug(product, shopifyProduct.slug)).toBe('oak-chair')
+    expect(getDocumentSlug({...product, seo: {url: {current: 'x'}}}, shopifyProduct.slug)).toBe('x')
+  })
+
+  it('treats another product with the same Shopify handle as taken', () => {
+    const documents = [
+      {_id: 'a', _type: 'product', store: {title: 'Oak Chair', slug: {current: 'oak-chair'}}},
+    ]
+    expect(isSlugTaken('oak-chair', {_id: 'b'}, documents, shopifyProduct.slug)).toBe(true)
+    expect(isSlugTaken('oak-chair', {_id: 'b'}, documents)).toBe(false)
+  })
+})
+
+describe('getSlugCandidatesQuery', () => {
+  it('projects the default fields, or the configured ones nested', () => {
+    expect(getSlugCandidatesQuery()).toContain('title, name, slug{current}, seo{url{current}}')
+    expect(getSlugCandidatesQuery(shopifyProduct.slug)).toContain(
+      'store{title, slug{current}}, seo{url{current}}',
+    )
+    expect(() => getSlugCandidatesQuery({source: ['title || true']})).toThrow()
   })
 })
 

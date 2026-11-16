@@ -37,6 +37,8 @@ Each function needs its own `package.json` with `@sanity/client`, `@sanity/funct
 
 Never reimplement `slugify`, the duplicate rules or the filters: the Studio preview runs the same code, so the saved slug is always the one the editor saw.
 
+**Slug source.** Pass the same `slug.source` the Studio field uses when it is not `title`/`name`: `autoSlugEvent(types, {source: ['headline']})` and `syncSlug(client, event.data, {source: ['headline']})`. Shopify types are never handled here (Shopify owns `store.slug`).
+
 **Duplicates.** The plugin's Duplicate action (registered after `structureTool()`) appends " Copy" to the title (once) and leaves out `seo.url` and `slug`, so the copy matches the `autoSlugEvent` filter (no handle, no slug) and gets its title slug when published: `homepage-copy`, then `homepage-copy-2`. A copy made another way that kept the original's handle is never invoked, and the Studio's uniqueness check blocks publishing it.
 
 ## Behaviour to preserve
