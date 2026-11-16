@@ -8,6 +8,7 @@ import {
   hasFallbackValue,
   type NormalizedSource,
   resolveFallback,
+  splitDocumentQuery,
 } from './fallbacks'
 
 const GLOBAL_IMAGE = {query: '*[_id == "preferences"][0].seo.image', label: 'Preferences'}
@@ -122,5 +123,27 @@ describe('getImageUrl', () => {
     expect(getImageUrl('not a url', project)).toBeUndefined()
     expect(getImageUrl({asset: {_ref: 'file-abc-pdf'}}, project)).toBeUndefined()
     expect(getImageUrl({asset: {_ref: 'image-abc-10x10-png'}}, {})).toBeUndefined()
+  })
+})
+
+describe('splitDocumentQuery', () => {
+  it('splits a document query from the field path it reads', () => {
+    expect(splitDocumentQuery('*[_type == "preferences"][0].seo.image')).toEqual({
+      documentQuery: '*[_type == "preferences"][0]',
+      path: 'seo.image',
+    })
+    expect(splitDocumentQuery(' *[_id == $id][0] . image ')).toEqual({
+      documentQuery: '*[_id == $id][0]',
+      path: 'image',
+    })
+  })
+
+  it('leaves other queries alone', () => {
+    expect(splitDocumentQuery('*[_type == "preferences"][0]')).toBeUndefined()
+    expect(
+      splitDocumentQuery('coalesce(*[_id == "a"][0].image, *[_id == "b"][0].image)'),
+    ).toBeUndefined()
+    expect(splitDocumentQuery('*[_type == "settings"][0].images[0].asset')).toBeUndefined()
+    expect(splitDocumentQuery('"static"')).toBeUndefined()
   })
 })

@@ -1,5 +1,6 @@
 import {EditIcon} from '@sanity/icons/Edit'
 import {Box, Button, Card, Stack, Text} from '@sanity/ui'
+import {Popover} from '@sanity/ui/popover'
 import {Tooltip} from '@sanity/ui/tooltip'
 import React from 'react'
 import {
@@ -11,6 +12,7 @@ import {
   type ObjectFieldProps,
   type ObjectInputProps,
   type ObjectMember,
+  Preview,
   type SlugInputProps,
   type SlugValidationContext,
   type StringFieldProps,
@@ -21,6 +23,7 @@ import {
   useSchema,
   useWorkspace,
 } from 'sanity'
+import {useIntentLink} from 'sanity/router'
 
 import {prepareDuplicate} from './duplicate'
 import {
@@ -31,6 +34,7 @@ import {
   getQueryKey,
   type NormalizedSource,
   resolveFallback,
+  splitDocumentQuery,
 } from './fallbacks'
 import {
   getCanonicalDocumentId,
@@ -304,12 +308,32 @@ function SearchListingInput(props: SearchListingInputProps) {
     fieldOptions.fallbacks as SearchListingFallbacks | undefined,
     props.pluginFallbacks,
   )
-  const imageFallback = hasImage(props.value) ? undefined : fallbacks.image
   const [isEditing, setIsEditing] = React.useState(false)
+  const client = useClient({apiVersion: API_VERSION})
+  const {projectId, dataset} = client.config()
+  // While previewing (not in edit mode), a listing with no image of its own shows its fallback.
+  // A Sanity image fallback is shown in the image field itself: the field's member is handed a
+  // stand-in value pointing at the fallback's asset, so it renders filled while the document
+  // stays empty, and Upload or Select writes a real image. Any other fallback (a URL) is shown
+  // as a plain image in place of the field. Edit mode always shows the document's own field.
+  const showFallback = !isEditing && !hasImage(props.value) && Boolean(fallbacks.image)
+  const fallbackImage = showFallback ? getFallbackImageValue(fallbacks.image?.value) : undefined
+  const fallbackImageUrl =
+    showFallback && !fallbackImage
+      ? getImageUrl(fallbacks.image?.value, {projectId, dataset}) || undefined
+      : undefined
   const handleEditToggle = React.useCallback(() => {
     setIsEditing((value) => !value)
   }, [])
-  const imageMembers = React.useMemo(() => props.members.filter(isImageMember), [props.members])
+  const imageMembers = React.useMemo(() => {
+    const members = props.members.filter(isImageMember)
+    if (!fallbackImage) return members
+    return members.map((member) =>
+      member.kind === 'field'
+        ? ({...member, field: {...member.field, value: fallbackImage}} as ObjectMember)
+        : member,
+    )
+  }, [props.members, fallbackImage])
   const metadataMembers = React.useMemo(
     () =>
       props.members.filter(
@@ -317,6 +341,27 @@ function SearchListingInput(props: SearchListingInputProps) {
       ),
     [props.members, hasHandle],
   )
+
+  let imageField: React.ReactNode
+  if (fallbackImageUrl) {
+    imageField = (
+      <FallbackSource source={fallbacks.image!.source}>
+        <FallbackImage url={fallbackImageUrl} />
+      </FallbackSource>
+    )
+  } else if (fallbackImage) {
+    imageField = (
+      <FallbackSource source={fallbacks.image!.source}>
+        {props.renderDefault({...props, members: imageMembers, value: {image: fallbackImage}})}
+      </FallbackSource>
+    )
+  } else {
+    imageField = props.renderDefault({
+      ...props,
+      members: imageMembers,
+      value: getImageOnlyValue(props.value),
+    })
+  }
 
   return (
     <SiteNameContext.Provider value={props.siteName ?? null}>
@@ -347,12 +392,7 @@ function SearchListingInput(props: SearchListingInputProps) {
                     />
                   </Tooltip>
                 </Box>
-                {imageFallback && <FallbackImage fallback={imageFallback} />}
-                {props.renderDefault({
-                  ...props,
-                  members: imageMembers,
-                  value: getImageOnlyValue(props.value),
-                })}
+                {imageField}
                 <SearchListingPreview />
                 {isEditing &&
                   props.renderDefault({
@@ -673,37 +713,189 @@ function useFallbacks(
 }
 
 /** The image a listing falls back to, shown in place of the empty image field. */
-function FallbackImage({fallback}: {fallback: ResolvedFallback}) {
-  const client = useClient({apiVersion: API_VERSION})
-  const {projectId, dataset} = client.config()
-  const url = getImageUrl(fallback.value, {projectId, dataset})
+function FallbackImage({url}: {url: string}) {
+  return (
+    // Matches the image input's preview (its RatioBox): a transparent-tone card in the
+    // listing's 1200×630 box, the image scaled down to fit at its own aspect ratio.
+    <Card tone="transparent" style={{aspectRatio: '1200 / 630'}}>
+      <img
+        src={url}
+        alt=""
+        style={{display: 'block', width: '100%', height: '100%', objectFit: 'scale-down'}}
+      />
+    </Card>
+  )
+}
 
-  if (!url) {
-    return null
+/**
+ * Marks the listing's image as borrowed, on hover over the whole field. A fallback from another
+ * document (a query such as `*[_type == "settings"][0].seo.image`) opens a popover with that
+ * document's preview, linking to the field. One read from this document (such as Shopify's
+ * `store.previewImageUrl`) names the field in a tooltip.
+ */
+function FallbackSource({source, children}: {source: NormalizedSource; children: React.ReactNode}) {
+  const document = useFormValue([]) as StudioFormDocument
+  const schema = useSchema()
+  const sourceDocument = useFallbackSourceDocument(source, document)
+  const sourceSchemaType = sourceDocument ? schema.get(sourceDocument.type) : undefined
+
+  if (sourceDocument && sourceSchemaType) {
+    return (
+      <FallbackSourcePopover
+        content={
+          <Stack gap={2}>
+            <Box paddingX={2} paddingTop={2}>
+              <Text size={1} weight="medium">
+                Fallback image from
+              </Text>
+            </Box>
+            <FallbackSourceLink {...sourceDocument} schemaType={sourceSchemaType} />
+          </Stack>
+        }
+      >
+        {children}
+      </FallbackSourcePopover>
+    )
   }
 
-  const label = fallback.source.label
+  const from =
+    source.kind === 'path'
+      ? getFieldTitlePath(
+          typeof document?._type === 'string' ? schema.get(document._type) : undefined,
+          source.path,
+        )
+      : source.label
 
   return (
-    <Stack gap={2}>
-      <Card radius={2} overflow="hidden" tone="transparent" border>
-        <img
-          src={url}
-          alt=""
-          style={{
-            display: 'block',
-            width: '100%',
-            aspectRatio: '1200 / 630',
-            objectFit: 'cover',
-            opacity: 0.75,
-          }}
-        />
-      </Card>
-      <Text size={1} muted>
-        {label ? `Fallback image from ${label}.` : 'Fallback image.'} Add an image to replace it.
-      </Text>
-    </Stack>
+    <Tooltip
+      animate
+      delay={5}
+      placement="top"
+      content={
+        <Text size={1} weight="medium">
+          {from ? `Fallback image from ${from}` : 'Fallback image'}
+        </Text>
+      }
+      portal
+    >
+      <Box>{children}</Box>
+    </Tooltip>
   )
+}
+
+/** The document a query fallback reads from, and the field it reads, once it resolves. */
+function useFallbackSourceDocument(source: NormalizedSource, document: StudioFormDocument) {
+  const documentStore = useDocumentStore()
+  const id = getCanonicalDocumentId(document?._id)
+  const type = typeof document?._type === 'string' ? document._type : ''
+  const split = source.kind === 'query' ? splitDocumentQuery(source.query) : undefined
+  const documentQuery = split?.documentQuery
+  const paramsKey = source.kind === 'query' ? JSON.stringify(source.params) : ''
+  const queryKey = documentQuery ? JSON.stringify([documentQuery, paramsKey, id, type]) : ''
+  const [result, setResult] = React.useState<{key: string; _id: string; _type: string} | null>(null)
+
+  React.useEffect(() => {
+    if (!documentQuery) return undefined
+    const params = JSON.parse(paramsKey || '{}') as Record<string, string>
+    const subscription = documentStore
+      .listenQuery(
+        `${documentQuery}{_id, _type}`,
+        {...params, id, draftId: `drafts.${id}`, type},
+        {apiVersion: API_VERSION, perspective: 'drafts', tag: 'search-listing.fallback-source'},
+      )
+      .subscribe({
+        next: (value: unknown) => {
+          const record = value as {_id?: unknown; _type?: unknown} | null
+          setResult(
+            record && typeof record._id === 'string' && typeof record._type === 'string'
+              ? {key: queryKey, _id: record._id, _type: record._type}
+              : null,
+          )
+        },
+        error: () => setResult(null),
+      })
+    return () => subscription.unsubscribe()
+  }, [documentStore, documentQuery, paramsKey, id, type, queryKey])
+
+  // A result from an earlier query (or none) is ignored.
+  if (!split || !result || result.key !== queryKey) return undefined
+  return {id: getCanonicalDocumentId(result._id), type: result._type, path: split.path}
+}
+
+/** The source document's own preview, opening it at the fallback field. */
+function FallbackSourceLink({
+  id,
+  type,
+  path,
+  schemaType,
+}: {
+  id: string
+  type: string
+  path: string
+  schemaType: NonNullable<ReturnType<ReturnType<typeof useSchema>['get']>>
+}) {
+  const {href, onClick} = useIntentLink({intent: 'edit', params: {id, type, path}})
+
+  return (
+    <Card as="a" href={href} onClick={onClick} radius={2} padding={1} __unstable_focusRing>
+      <Preview schemaType={schemaType} value={{_id: id, _type: type}} layout="compact" />
+    </Card>
+  )
+}
+
+/**
+ * A popover that opens on hover like a tooltip but stays open while the pointer moves into
+ * it, so its link can be clicked.
+ */
+function FallbackSourcePopover({
+  content,
+  children,
+}: {
+  content: React.ReactNode
+  children: React.ReactNode
+}) {
+  const [open, setOpen] = React.useState(false)
+  const timer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const schedule = React.useCallback((next: boolean, delay: number) => {
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => setOpen(next), delay)
+  }, [])
+  const show = React.useCallback(() => schedule(true, 150), [schedule])
+  const hide = React.useCallback(() => schedule(false, 200), [schedule])
+  React.useEffect(() => () => clearTimeout(timer.current), [])
+
+  return (
+    <Popover
+      animate
+      open={open}
+      placement="top"
+      portal
+      content={
+        <Box padding={1} style={{minWidth: 260}} onMouseEnter={show} onMouseLeave={hide}>
+          {content}
+        </Box>
+      }
+    >
+      <Box onMouseEnter={show} onMouseLeave={hide}>
+        {children}
+      </Box>
+    </Popover>
+  )
+}
+
+/** `store.previewImageUrl` as the schema's field titles: "Shopify › Preview image URL". */
+function getFieldTitlePath(schemaType: unknown, path: string): string {
+  let type = schemaType as {fields?: Array<{name: string; type?: unknown}>} | undefined
+  const titles: string[] = []
+
+  for (const key of path.split('.')) {
+    const field = type?.fields?.find((candidate) => candidate.name === key)
+    const fieldType = field?.type as {title?: string; fields?: unknown} | undefined
+    titles.push(fieldType?.title || key)
+    type = fieldType as typeof type
+  }
+
+  return titles.join(' › ')
 }
 
 function hasImage(value: Record<string, unknown> | undefined) {
@@ -877,6 +1069,28 @@ function stripHtml(value: string) {
 
   const document = new DOMParser().parseFromString(value, 'text/html')
   return document.body.textContent?.replace(/\s+/g, ' ').trim() ?? ''
+}
+
+/**
+ * The stand-in image value for a fallback that is a Sanity image (an image object or an image
+ * asset), or `undefined` for anything the image input cannot show, such as a URL.
+ */
+function getFallbackImageValue(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const record = value as Record<string, unknown>
+  const asset =
+    record.asset && typeof record.asset === 'object'
+      ? (record.asset as Record<string, unknown>)
+      : record
+  const id = [asset._ref, asset._id].find((candidate) => typeof candidate === 'string')
+  if (typeof id !== 'string' || !id.startsWith('image-')) return undefined
+
+  return {
+    _type: 'image',
+    asset: {_type: 'reference', _ref: id},
+    ...(record.crop ? {crop: record.crop} : {}),
+    ...(record.hotspot ? {hotspot: record.hotspot} : {}),
+  }
 }
 
 function getImageOnlyValue(value: Record<string, unknown> | undefined) {
