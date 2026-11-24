@@ -15,14 +15,18 @@ const LEVEL_RANK: Record<FormNodeValidation['level'], number> = {info: 1, warnin
 
 /**
  * Validation messages on the given members (the ones closed edit mode hides), most severe
- * first, so the Edit toggle can say something needs attention.
+ * first, so the Edit toggle can say something needs attention. `getTitle` names a member, such
+ * as in the Studio's language; the schema title is used where it returns nothing.
  */
-export function getHiddenProblems(members: readonly ObjectMember[]): HiddenProblem[] {
+export function getHiddenProblems(
+  members: readonly ObjectMember[],
+  getTitle?: (name: string) => string | undefined,
+): HiddenProblem[] {
   const problems: HiddenProblem[] = []
 
   for (const member of members) {
     if (member.kind !== 'field') continue
-    const title = member.field.schemaType.title || member.name
+    const title = getTitle?.(member.name) || member.field.schemaType.title || member.name
     for (const marker of member.field.validation ?? []) {
       problems.push({title, message: marker.message, level: marker.level})
     }

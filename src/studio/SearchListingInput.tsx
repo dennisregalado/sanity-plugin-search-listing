@@ -9,9 +9,11 @@ import {
   useClient,
   useFormValue,
   useSchema,
+  useTranslation,
 } from 'sanity'
 
 import {getImageUrl} from '../fallbacks'
+import {searchListingLocaleNamespace} from '../i18n'
 import type {SearchListingFallbacks} from '../types'
 import {API_VERSION} from './constants'
 import {
@@ -27,6 +29,7 @@ import {
   getHighestLevel,
   getLevelTone,
   type HiddenProblem,
+  type HiddenProblemLevel,
   isFocusOnHiddenMember,
 } from './editMode'
 import {FallbackImage, FallbackSource} from './FallbackSource'
@@ -42,19 +45,6 @@ export type SearchListingInputProps = ObjectInputProps & {
   /** The plugin's `siteUrl`, normalized. */
   siteUrl?: string
   pluginFallbacks?: SearchListingFallbacks
-}
-
-/** The Edit toggle's user-facing strings. */
-const EDIT_TOGGLE_STRINGS = {
-  edit: 'Edit',
-  done: 'Done',
-  editLabel: 'Edit listing',
-  doneLabel: 'Done editing',
-  levelHeading: {
-    error: 'Fix before publishing',
-    warning: 'Needs attention',
-    info: 'Notes',
-  },
 }
 
 export function SearchListingField(props: ObjectFieldProps) {
@@ -95,7 +85,11 @@ export function SearchListingInput(props: SearchListingInputProps) {
   )
   // Title, description and URL handle only render in edit mode, so their validation is
   // surfaced on the toggle while it's closed.
-  const hiddenProblems = React.useMemo(() => getHiddenProblems(metadataMembers), [metadataMembers])
+  const {t} = useTranslation(searchListingLocaleNamespace)
+  const hiddenProblems = React.useMemo(
+    () => getHiddenProblems(metadataMembers, (name) => getMemberTitle(t, name)),
+    [metadataMembers, t],
+  )
   const hasHiddenError = getHighestLevel(hiddenProblems) === 'error'
 
   const hiddenOnFocus = isFocusOnHiddenMember(props.focusPath)
@@ -225,9 +219,10 @@ export function EditToggle({
   problems: readonly HiddenProblem[]
   onToggle: () => void
 }) {
+  const {t} = useTranslation(searchListingLocaleNamespace)
   const shownProblems = isEditing ? [] : problems
   const level = getHighestLevel(shownProblems)
-  const label = isEditing ? EDIT_TOGGLE_STRINGS.doneLabel : EDIT_TOGGLE_STRINGS.editLabel
+  const label = isEditing ? t('edit-toggle.done.label') : t('edit-toggle.edit.label')
 
   return (
     <Tooltip
@@ -242,12 +237,12 @@ export function EditToggle({
           </Text>
           {level && (
             <Text size={1} muted>
-              {EDIT_TOGGLE_STRINGS.levelHeading[level]}
+              {getLevelHeading(t, level)}
             </Text>
           )}
           {shownProblems.map((problem) => (
             <Text key={`${problem.title}\n${problem.message}`} size={1}>
-              {problem.title}: {problem.message}
+              {t('edit-toggle.problem', {title: problem.title, message: problem.message})}
             </Text>
           ))}
         </Stack>
@@ -257,7 +252,7 @@ export function EditToggle({
         mode={level ? 'ghost' : 'bleed'}
         tone={getLevelTone(level)}
         icon={EditIcon}
-        text={isEditing ? EDIT_TOGGLE_STRINGS.done : EDIT_TOGGLE_STRINGS.edit}
+        text={isEditing ? t('edit-toggle.done') : t('edit-toggle.edit')}
         fontSize={1}
         padding={2}
         onClick={onToggle}
@@ -267,6 +262,23 @@ export function EditToggle({
       />
     </Tooltip>
   )
+}
+
+type TFunction = ReturnType<typeof useTranslation>['t']
+
+/** The Edit toggle tooltip's heading above problems of the given (highest) level. */
+function getLevelHeading(t: TFunction, level: NonNullable<HiddenProblemLevel>): string {
+  if (level === 'error') return t('edit-toggle.level.error')
+  if (level === 'warning') return t('edit-toggle.level.warning')
+  return t('edit-toggle.level.info')
+}
+
+/** A listing member's title as its field shows it, or `undefined` for the schema's own. */
+function getMemberTitle(t: TFunction, name: string): string | undefined {
+  if (name === 'title') return t('field.title.title')
+  if (name === 'description') return t('field.description.title')
+  if (name === 'url') return t('field.url.title')
+  return undefined
 }
 
 export function isImageMember(member: ObjectMember) {

@@ -45,6 +45,17 @@ describe('getHiddenProblems', () => {
     ])
     expect(problems).toEqual([{title: 'description', message: 'Too long', level: 'warning'}])
   })
+
+  it('names members with getTitle, falling back to the schema title', () => {
+    const problems = getHiddenProblems(
+      [
+        field('title', 'Page title', [warning('For lang')]),
+        field('url', 'URL handle', [error('x')]),
+      ],
+      (name) => (name === 'title' ? 'Sidetittel' : undefined),
+    )
+    expect(problems.map((problem) => problem.title)).toEqual(['URL handle', 'Sidetittel'])
+  })
 })
 
 describe('getHighestLevel and getLevelTone', () => {

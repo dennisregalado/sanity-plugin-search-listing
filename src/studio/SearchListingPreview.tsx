@@ -1,8 +1,9 @@
 import {Stack, Text} from '@sanity/ui'
 import React from 'react'
-import {useCurrentLocale, useFormValue, useWorkspace} from 'sanity'
+import {useCurrentLocale, useFormValue, useTranslation, useWorkspace} from 'sanity'
 
 import {getPathValue} from '../fallbacks'
+import {searchListingLocaleNamespace} from '../i18n'
 import {
   FallbacksContext,
   FieldOptionsContext,
@@ -15,14 +16,6 @@ import {
 import type {StudioFormDocument} from './types'
 import {clipText, getFieldText, getPathBreadcrumbSegments, getPricePreview} from './utils'
 
-/** The preview's user-facing strings. */
-const STRINGS = {
-  /** Shown, muted, in place of the title when the listing has no title or fallback. */
-  untitled: 'Untitled',
-  /** Shown, muted, at the end of the breadcrumb when the page has no URL handle yet. */
-  missingHandle: 'url-handle',
-}
-
 /** Search results link their title; the Card's link colour reads well in light and dark. */
 const TITLE_STYLE: React.CSSProperties = {color: 'var(--card-link-fg-color)'}
 
@@ -30,6 +23,7 @@ export function SearchListingPreview() {
   const document = useFormValue([]) as StudioFormDocument
   const workspace = useWorkspace()
   const locale = useCurrentLocale()
+  const {t} = useTranslation(searchListingLocaleNamespace)
   const siteName = React.useContext(SiteNameContext)
   const siteUrl = useSiteUrl()
   const pathPrefix = React.useContext(PathPrefixContext)
@@ -61,7 +55,7 @@ export function SearchListingPreview() {
             {missingHandle && (
               <>
                 {siteUrl || pathSegments.length ? ' › ' : ''}
-                <em>{STRINGS.missingHandle}</em>
+                <em>{t('preview.missing-handle')}</em>
               </>
             )}
           </Text>
@@ -72,7 +66,7 @@ export function SearchListingPreview() {
           </Text>
         ) : (
           <Text size={3} weight="medium" muted>
-            {STRINGS.untitled}
+            {t('preview.untitled')}
           </Text>
         )}
         {description && (

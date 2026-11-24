@@ -4,18 +4,21 @@ import {Box, Button, Card, Flex, Stack, Text, useTheme_v2} from '@sanity/ui'
 import {Tooltip} from '@sanity/ui/tooltip'
 import React from 'react'
 import {
+  type ObjectFieldProps,
   PatchEvent,
   set,
   setIfMissing,
   type SlugInputProps,
+  type SlugValue,
   type StringFieldProps,
   type StringInputProps,
   useEditState,
   useFormValue,
+  useTranslation,
 } from 'sanity'
 
+import {searchListingLocaleNamespace} from '../i18n'
 import {getCanonicalDocumentId, type SlugDocument} from '../resolveSlug'
-import {HOME_DESCRIPTION_PLACEHOLDER} from './constants'
 import {
   FallbacksContext,
   FieldOptionsContext,
@@ -28,16 +31,6 @@ import type {StudioFormDocument} from './types'
 import {useGeneratedSlug} from './useGeneratedSlug'
 import {clipText, getFieldText, getPathBreadcrumbSegments, getUrlPreview} from './utils'
 
-/** Every user-facing string of these inputs, in one place for translation. */
-const STRINGS = {
-  homeTitle: 'Home page title',
-  charactersUsed: (count: number, max: number) => `${count} of ${max} characters used`,
-  resetHandle: 'Reset',
-  resetHandleTooltip: (path: string) => `Reset to ${path}, the URL generated from the title`,
-  publishedMoved: (path: string) =>
-    `Published at ${path}. Changing the handle moves the page; links to the old URL need a redirect.`,
-}
-
 /**
  * The URL handle's text input size and padding (Sanity UI's `TextInput` defaults), passed to it
  * explicitly so the path prefix drawn over it uses the same theme font size and spacing.
@@ -45,9 +38,14 @@ const STRINGS = {
 const HANDLE_FONT_SIZE = 2
 const HANDLE_PADDING = 3
 
+/**
+ * The title field, labelled in the Studio's language: "Home page title" on a `home` document.
+ * Field titles in the schema can't be translated, so the listing's fields set their own.
+ */
 export function HomePageTitleField(props: StringFieldProps) {
   const {home} = React.useContext(FieldOptionsContext)
-  const title = home ? STRINGS.homeTitle : props.schemaType.title
+  const {t} = useTranslation(searchListingLocaleNamespace)
+  const title = home ? t('field.title.home-title') : t('field.title.title')
 
   return props.renderDefault({
     ...props,
@@ -55,12 +53,16 @@ export function HomePageTitleField(props: StringFieldProps) {
   })
 }
 
-/**
- * What an empty home page field shows when it has no fallback: the site's address for the
- * title, a prompt for the description.
- */
-function getHomePlaceholder(fieldName: string, siteUrl: string) {
-  return fieldName === 'description' ? HOME_DESCRIPTION_PLACEHOLDER : siteUrl
+/** The description field, labelled in the Studio's language. */
+export function MetaDescriptionField(props: StringFieldProps) {
+  const {t} = useTranslation(searchListingLocaleNamespace)
+  return props.renderDefault({...props, title: t('field.description.title')})
+}
+
+/** The URL handle field, labelled in the Studio's language. */
+export function UrlHandleField(props: ObjectFieldProps<SlugValue>) {
+  const {t} = useTranslation(searchListingLocaleNamespace)
+  return props.renderDefault({...props, title: t('field.url.title')})
 }
 
 type TextElement = HTMLInputElement | HTMLTextAreaElement
@@ -104,6 +106,7 @@ function useAdoptedFallback(value: string, fallback: string) {
 }
 
 export function PlaceholderInput(props: StringInputProps) {
+  const {t} = useTranslation(searchListingLocaleNamespace)
   const fieldName = getFieldName(props)
   const options = React.useContext(FieldOptionsContext)
   const siteUrl = useSiteUrl()
@@ -119,10 +122,12 @@ export function PlaceholderInput(props: StringInputProps) {
     return clipText(text, maxLength, '')
   }, [fallbacks, fieldName, maxLength])
 
+  // With no fallback, an empty home page field shows the site's address for the title and a
+  // prompt for the description.
   const placeholder = getPlaceholder(
     fallbackText,
     options.home,
-    getHomePlaceholder(fieldName, siteUrl),
+    fieldName === 'description' ? t('field.description.home-placeholder') : siteUrl,
   )
 
   // Only what is typed counts; the fallback is not the field's value.
@@ -149,13 +154,14 @@ export function PlaceholderInput(props: StringInputProps) {
         } as StringInputProps['elementProps'],
       })}
       <Text size={1} muted>
-        {STRINGS.charactersUsed(count, maxLength)}
+        {t('field.characters-used', {count, max: maxLength})}
       </Text>
     </Stack>
   )
 }
 
 export function UrlHandleInput(props: SlugInputProps) {
+  const {t} = useTranslation(searchListingLocaleNamespace)
   const pathPrefix = React.useContext(PathPrefixContext)
   const slugFallback = React.useContext(SlugFallbackContext)
   const siteUrl = useSiteUrl()
@@ -246,14 +252,16 @@ export function UrlHandleInput(props: SlugInputProps) {
         </Box>
         {showReset && (
           <Tooltip
-            content={<Text size={1}>{STRINGS.resetHandleTooltip(toPath(generatedSlug))}</Text>}
+            content={
+              <Text size={1}>{t('url-handle.reset.tooltip', {path: toPath(generatedSlug)})}</Text>
+            }
             placement="top"
             portal
           >
             <Button
               mode="ghost"
               icon={ResetIcon}
-              text={STRINGS.resetHandle}
+              text={t('url-handle.reset')}
               onClick={handleReset}
             />
           </Tooltip>
@@ -264,7 +272,7 @@ export function UrlHandleInput(props: SlugInputProps) {
       </Text>
       {movedFrom && (
         <Card tone="caution" padding={3} radius={2} border>
-          <Text size={1}>{STRINGS.publishedMoved(toPath(movedFrom))}</Text>
+          <Text size={1}>{t('url-handle.published-moved', {path: toPath(movedFrom)})}</Text>
         </Card>
       )}
     </Stack>
