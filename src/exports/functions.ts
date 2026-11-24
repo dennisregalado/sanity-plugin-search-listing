@@ -1,2 +1,2 @@
 export * from '../functions'
-export type {SlugDocument} from '../resolveSlug'
+export type {SlugDocument, SlugOptions} from '../resolveSlug'
