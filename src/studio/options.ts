@@ -57,6 +57,7 @@ export function getValidationFieldOptions(context: {
 /** Keys of `SearchListingFieldOptions`, to tell the field's own options from the type's. */
 export const FIELD_OPTION_KEYS = [
   'pathPrefix',
+  'siteUrl',
   'handle',
   'fallbacks',
   'home',

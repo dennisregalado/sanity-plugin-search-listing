@@ -41,21 +41,28 @@ export function getFieldText(value: unknown) {
   return ''
 }
 
-export function getPricePreview(value: unknown, currency: string) {
-  const amount = typeof value === 'string' ? Number(value) : value
+/**
+ * `value` as a price in `currency`, in the Studio's `locale` and the currency's usual format
+ * ("$1,299.00", as search results show it), or `undefined` for a missing, zero or negative
+ * amount or an unknown currency. A malformed locale falls back to `en-US`.
+ */
+export function getPricePreview(value: unknown, currency: string, locale = 'en-US') {
+  const amount = typeof value === 'string' && value.trim() ? Number(value) : value
   if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
     return undefined
   }
 
+  const format = (tag: string) =>
+    new Intl.NumberFormat(tag, {style: 'currency', currency}).format(amount)
   try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      notation: 'compact',
-    }).format(amount)
+    return format(locale)
   } catch {
-    // An unknown currency code.
-    return undefined
+    // A malformed locale tag or an unknown currency code; only the first is worth a retry.
+    try {
+      return format('en-US')
+    } catch {
+      return undefined
+    }
   }
 }
 
@@ -129,9 +136,10 @@ export function getImageOnlyValue(value: Record<string, unknown> | undefined) {
   return {image: value.image}
 }
 
-export function getUrlPreview(slug: string | undefined, pathPrefix = '/') {
+/** The URL line under the URL handle input: site URL, route and handle. */
+export function getUrlPreview(slug: string | undefined, pathPrefix = '/', siteUrl = getHost()) {
   const path = getPathBreadcrumbSegments(pathPrefix, slug).join('/')
-  return [getHost(), path].filter(Boolean).join('/')
+  return [siteUrl, path].filter(Boolean).join('/')
 }
 
 export function getPathBreadcrumbSegments(pathPrefix: string, slug: string | undefined) {
@@ -151,6 +159,10 @@ export function getPathSegments(path: string | undefined) {
     .filter(Boolean)
 }
 
+/** Any base works: only the pathname is read, so a full URL's own host is dropped. */
+const PATHNAME_BASE = 'https://search-listing.invalid'
+
+/** The pathname of `path`, a path or a full URL, without its query or hash. */
 export function parsePathname(path: string) {
   const trimmed = path.trim()
 
@@ -159,12 +171,49 @@ export function parsePathname(path: string) {
   }
 
   try {
-    return new URL(trimmed, getHost()).pathname
+    return new URL(trimmed, PATHNAME_BASE).pathname
   } catch {
     return trimmed.split(/[?#]/)[0] || ''
   }
 }
 
+/** The Studio's own origin, shown when no `siteUrl` is set. */
 export function getHost() {
   return typeof window === 'undefined' ? '' : window.location.origin
+}
+
+/**
+ * `value` as a site URL to show in the listing: an absolute http(s) URL without a trailing
+ * slash, query or hash (`'https://acme.com/'` → `'https://acme.com'`, `'https://acme.com/shop/'`
+ * → `'https://acme.com/shop'`), or `undefined` for anything else.
+ */
+export function normalizeSiteUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !value.trim()) return undefined
+  let url: URL
+  try {
+    url = new URL(value.trim())
+  } catch {
+    return undefined
+  }
+  if ((url.protocol !== 'http:' && url.protocol !== 'https:') || !url.hostname) return undefined
+  return `${url.origin}${url.pathname.replace(/\/+$/, '')}`
+}
+
+const warnedSiteUrls = new Set<string>()
+
+/**
+ * The site URL from a `siteUrl` option, normalized. A value that is set but is not an absolute
+ * http(s) URL is ignored, with a console warning (once per value) naming `where` it was set.
+ */
+export function resolveSiteUrlOption(value: unknown, where: string): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined
+  const siteUrl = normalizeSiteUrl(value)
+  const key = `${where}:${String(value)}`
+  if (!siteUrl && !warnedSiteUrls.has(key)) {
+    warnedSiteUrls.add(key)
+    console.warn(
+      `[search-listing] Ignoring ${where} siteUrl ${JSON.stringify(value)}: expected an absolute http(s) URL, such as "https://example.com".`,
+    )
+  }
+  return siteUrl
 }
