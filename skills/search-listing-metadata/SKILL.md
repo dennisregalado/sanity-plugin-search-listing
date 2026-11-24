@@ -20,7 +20,9 @@ For each field, the first value with content wins:
 2. The field's own fallbacks (the `fallbacks` option on that type's `seo` field). Without any, `title` uses `title`/`name` and `description` uses `description`. A Sanity Connect field spreading `shopifyProduct` / `shopifyCollection` uses `store.title`, `store.descriptionHtml` and the `store` image instead.
 3. The plugin-level fallbacks (`searchListing({fallbacks})`), typically the site-wide settings document.
 
-Before coding, read `sanity.config.ts` and every `seo` field's `options.fallbacks`, and write the order down per route.
+Before coding, read `sanity.config.ts` and every `seo` field's `options.fallbacks` (and those of named `seo` subtypes, which the field's own options override), and write the order down per route.
+
+Canonical and `og:url` use the same origin the Studio shows: the field's `siteUrl` option, else the plugin's `siteUrl`. Read it from the same env variable in both places so the preview and the tags agree.
 
 ## Shape
 
