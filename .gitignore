@@ -58,3 +58,8 @@ yalc.lock
 
 # Compiled plugin
 dist
+
+# Workbench
+dev/screenshots
+dev/studio/.sanity
+dev/studio/dist

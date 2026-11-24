@@ -43,13 +43,15 @@
   ],
   "scripts": {
     "build": "plugin-kit verify-package --silent && pkg-utils build --strict --check --clean",
+    "dev:studio": "cd dev/studio && SANITY_TELEMETRY_DISABLED=1 sanity dev --host 127.0.0.1",
     "format": "prettier --write --cache --ignore-unknown .",
     "link-watch": "plugin-kit link-watch",
     "lint": "eslint .",
     "prepublishOnly": "npm run lint && npm run typecheck && npm test && npm run build",
-    "watch": "pkg-utils watch --strict",
+    "screenshot": "node dev/screenshot.mjs",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.dist.json --noEmit && tsc -p skills/tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.dist.json --noEmit && tsc -p skills/tsconfig.json --noEmit",
+    "watch": "pkg-utils watch --strict"
   },
   "devDependencies": {
     "@sanity/icons": "^5.4.0",
