@@ -25,3 +25,6 @@ browser does not work: it only has data under Playwright, where the API is mocke
 Known mock limits: list search (`text::query`) matches everything, nothing is saved (edits stay
 in the form), uploads are not mocked, and listeners only send `welcome`. The Sanity version
 check logs a console error; ignore it.
+
+After switching branches or merging, restart `npm run dev:studio`: Vite can keep serving a
+module from before the checkout, so a screenshot may show old code.

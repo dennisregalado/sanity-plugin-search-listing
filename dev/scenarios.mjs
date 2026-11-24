@@ -1,5 +1,6 @@
 /**
- * Screenshot scenarios: a Studio path, optional interactions, and the field to capture.
+ * Screenshot scenarios: a Studio path, optional interactions, and the field to capture
+ * (`field`, default `seo`, is waited for; `capture` names another field to capture).
  * `documents` replaces the fixtures for one scenario. Add one for each visual change.
  *
  * `run({page, field})` receives the Playwright page and the `seo` field's locator.
@@ -44,4 +45,11 @@ scenarios.push({
     await title.pressSequentially('Our story', {delay: 20})
     await page.waitForTimeout(4000)
   },
+})
+
+scenarios.push({
+  name: 'page-handle-moved',
+  path: '/structure/page;page-long',
+  capture: 'seo.url',
+  run: async ({field}) => editButton(field).click(),
 })

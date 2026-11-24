@@ -157,7 +157,7 @@ export function useResolvedSlugFallback(
  * current by a live query. `undefined` while loading, when `documentType` is empty, or when
  * the dataset cannot be queried (the caller then keeps the title slug).
  */
-function useSlugCandidates(
+export function useSlugCandidates(
   documentType: string,
   slugOptions: SlugOptions | undefined,
 ): SlugDocument[] | undefined {

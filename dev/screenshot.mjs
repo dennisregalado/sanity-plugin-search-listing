@@ -54,7 +54,14 @@ for (const scenario of selected) {
   await page.waitForTimeout(500)
   const file = join(outDir, `${scenario.name}${dark ? '-dark' : ''}.png`)
   if (full) await page.screenshot({path: file})
-  else await field.screenshot({path: file})
+  else {
+    // `capture` names a field to capture instead, such as one that only renders in edit mode.
+    const target = scenario.capture
+      ? page.locator(`[data-testid="field-${scenario.capture}"]`).first()
+      : field
+    await target.scrollIntoViewIfNeeded()
+    await target.screenshot({path: file})
+  }
   console.log(`${file}${errors.length ? `  (page errors: ${errors.join(' | ')})` : ''}`)
   await context.close()
 }

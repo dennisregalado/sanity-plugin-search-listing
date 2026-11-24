@@ -63,6 +63,22 @@ export const documents = [
       url: {_type: 'slug', current: 'about-us'},
     },
   },
+  // A draft of `page-long` whose handle was edited: it moves the published page.
+  {
+    _id: 'drafts.page-long',
+    _type: 'page',
+    _createdAt: now,
+    _updatedAt: now,
+    _rev: 'r2',
+    title: 'Contact',
+    slug: {_type: 'slug', current: 'contact'},
+    seo: {
+      _type: 'seo',
+      title:
+        'Contact Acme Store customer support for orders, returns, wholesale and press enquiries today',
+      url: {_type: 'slug', current: 'contact-us'},
+    },
+  },
   {
     _id: 'page-empty',
     _type: 'page',
