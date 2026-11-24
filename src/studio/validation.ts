@@ -1,6 +1,6 @@
 import type {SlugValidationContext} from 'sanity'
 
-import {getCanonicalDocumentId} from '../resolveSlug'
+import {DEFAULT_SLUG_CURRENT, getCanonicalDocumentId} from '../resolveSlug'
 import {API_VERSION} from './constants'
 import {getValidationFieldOptions} from './options'
 
@@ -14,9 +14,8 @@ export async function isUrlHandleUnique(slug: string, context: SlugValidationCon
   }
 
   // The handle, and every routing slug field the type uses (`slug`, or e.g. `store.slug`).
-  const currentPaths = getValidationFieldOptions(context).slug?.current?.length
-    ? getValidationFieldOptions(context).slug!.current!
-    : ['slug']
+  const configured = getValidationFieldOptions(context).slug?.current
+  const currentPaths = configured?.length ? configured : DEFAULT_SLUG_CURRENT
   const owned = ['seo.url', ...currentPaths.filter((path) => /^[A-Za-z_][\w.]*$/.test(path))]
     .map((path) => `${path}.current == $slug`)
     .join(' || ')
