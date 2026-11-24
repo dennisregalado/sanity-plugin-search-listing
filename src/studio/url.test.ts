@@ -1,6 +1,7 @@
 import {afterEach, describe, expect, it, vi} from 'vitest'
 
 import {
+  getPathSegments,
   getPricePreview,
   getUrlPreview,
   normalizeSiteUrl,
@@ -115,5 +116,16 @@ describe('parsePathname', () => {
     expect(parsePathname('about')).toBe('/about')
     expect(parsePathname('https://acme.com/products/tote')).toBe('/products/tote')
     expect(parsePathname('  ')).toBe('')
+  })
+})
+
+describe('getPathSegments', () => {
+  it('shows segments as typed, not percent-encoded', () => {
+    expect(getPathSegments('/pages/Join Us!')).toEqual(['pages', 'Join Us!'])
+    expect(getPathSegments('/pages/caf%C3%A9')).toEqual(['pages', 'café'])
+  })
+
+  it('keeps a segment that is not valid percent-encoding', () => {
+    expect(getPathSegments('/pages/100%')).toEqual(['pages', '100%'])
   })
 })

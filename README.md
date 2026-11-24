@@ -376,23 +376,38 @@ The Functions read the document's top-level `seo` field.
 
 ## Translations
 
-The Studio UI strings go through Sanity's i18n, in the `search-listing` namespace (exported as `searchListingLocaleNamespace`). English ships as `searchListingUsEnglishLocaleBundle`. To add a locale, give a bundle with the same keys (see the English bundle and `SearchListingLocaleResourceKeys` for the key names):
+The plugin's Studio UI goes through Sanity's i18n, in the `search-listing` namespace (`searchListingLocaleNamespace`), with US English built in (`searchListingUsEnglishLocaleBundle`). To translate it, add a bundle for a locale your Studio has (from a `@sanity/locale-*` package or `i18n.locales`). Missing keys fall back to English:
 
 ```ts
-import {defineLocaleResourceBundle} from 'sanity'
-import {searchListingLocaleNamespace} from 'sanity-plugin-search-listing'
+import {defineConfig, defineLocaleResourceBundle} from 'sanity'
+import {
+  searchListingLocaleNamespace,
+  type SearchListingLocaleResourceKeys,
+} from 'sanity-plugin-search-listing'
 
-export const searchListingNorwegian = defineLocaleResourceBundle({
-  locale: 'nb-NO',
-  namespace: searchListingLocaleNamespace,
-  resources: {
-    // keys from the English bundle
+const norwegian: Partial<Record<SearchListingLocaleResourceKeys, string>> = {
+  'edit-toggle.edit': 'Rediger',
+  'edit-toggle.done': 'Ferdig',
+  'preview.untitled': 'Uten tittel',
+  'field.characters-used': '{{count}} av {{max}} tegn brukt',
+  // …
+}
+
+export default defineConfig({
+  // …
+  i18n: {
+    bundles: [
+      defineLocaleResourceBundle({
+        locale: 'nb-NO',
+        namespace: searchListingLocaleNamespace,
+        resources: norwegian, // or () => import('./search-listing.nb-NO')
+      }),
+    ],
   },
 })
-
-// sanity.config.ts
-defineConfig({i18n: {bundles: [searchListingNorwegian]}})
 ```
+
+`SearchListingLocaleResourceKeys` lists every key; the English strings and what each one is for are in [`src/i18n/resources.ts`](https://github.com/dennisregalado/sanity-plugin-search-listing/blob/main/src/i18n/resources.ts). Validation messages are translated too. Field titles in the schema stay English (Sanity 6 cannot translate them), but the plugin's own labels for the title, description and URL handle fields are translated. Console warnings and the duplicate's " Copy" suffix are not translated.
 
 ## Development
 

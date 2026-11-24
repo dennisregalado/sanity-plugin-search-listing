@@ -45,6 +45,12 @@ for (const scenario of selected) {
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await installMockApi(page, {documents: scenario.documents})
+  // `locale` picks the Studio's language, as the user menu would (stored per project and workspace).
+  if (scenario.locale) {
+    await page.addInitScript((locale) => {
+      localStorage.setItem('sanity-locale:mock1234:default', locale)
+    }, scenario.locale)
+  }
   await page.goto(`${STUDIO}${scenario.path}`, {waitUntil: 'load'})
   const field = page.locator(`[data-testid="field-${scenario.field ?? 'seo'}"]`).first()
   await field.waitFor({timeout: 30000})

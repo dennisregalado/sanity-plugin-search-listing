@@ -155,8 +155,17 @@ export function getPathSegments(path: string | undefined) {
 
   return parsedPath
     .split('/')
-    .map((segment) => segment.trim())
+    .map((segment) => decodeSegment(segment).trim())
     .filter(Boolean)
+}
+
+/** A path segment as typed: `Join%20Us!` (how URL parsing encodes it) shows as `Join Us!`. */
+function decodeSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment)
+  } catch {
+    return segment
+  }
 }
 
 /** Any base works: only the pathname is read, so a full URL's own host is dropped. */

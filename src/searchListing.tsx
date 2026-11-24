@@ -9,8 +9,15 @@ import {
 } from 'sanity'
 
 import {prepareDuplicate} from './duplicate'
+import {getValidationMessage, searchListingUsEnglishLocaleBundle} from './i18n'
 import {isValidUrlHandle} from './resolveSlug'
-import {HomePageTitleField, PlaceholderInput, UrlHandleInput} from './studio/inputs'
+import {
+  HomePageTitleField,
+  MetaDescriptionField,
+  PlaceholderInput,
+  UrlHandleField,
+  UrlHandleInput,
+} from './studio/inputs'
 import {getSeoFieldNames, getValidationFieldOptions} from './studio/options'
 import {SearchListingImageField, SearchListingImageInput} from './studio/SearchListingImage'
 import {
@@ -66,10 +73,10 @@ export const searchListing = definePlugin<SearchListingPluginOptions | void>((op
         },
         validation: (rule) =>
           rule
-            .custom((value, context) => {
+            .custom(async (value, context) => {
               const {maxLength} = getValidationFieldOptions(context)
               return typeof value === 'string' && value.length > maxLength.title
-                ? 'Longer titles may be truncated by search engines'
+                ? getValidationMessage(context, 'validation.title-too-long')
                 : true
             })
             .warning(),
@@ -80,16 +87,17 @@ export const searchListing = definePlugin<SearchListingPluginOptions | void>((op
         title: 'Meta description',
         type: 'text',
         components: {
+          field: MetaDescriptionField,
           input: PlaceholderInput,
         },
         rows: 4,
         validation: (rule) =>
           rule
-            .custom((value, context) => {
+            .custom(async (value, context) => {
               const {maxLength} = getValidationFieldOptions(context)
 
               if (typeof value === 'string' && value.length > maxLength.description) {
-                return 'Longer descriptions may be truncated by search engines'
+                return getValidationMessage(context, 'validation.description-too-long')
               }
 
               return true
@@ -105,14 +113,15 @@ export const searchListing = definePlugin<SearchListingPluginOptions | void>((op
           isUnique: isUrlHandleUnique,
         },
         validation: (rule) =>
-          rule.custom((value) => {
+          rule.custom(async (value, context) => {
             if (!value?.current || isValidUrlHandle(value.current)) {
               return true
             }
 
-            return 'Use lowercase letters, numbers and hyphens only'
+            return getValidationMessage(context, 'validation.url-handle-invalid')
           }),
         components: {
+          field: UrlHandleField,
           input: UrlHandleInput,
         },
       }),
@@ -121,6 +130,9 @@ export const searchListing = definePlugin<SearchListingPluginOptions | void>((op
 
   return {
     name: 'search-listing',
+    i18n: {
+      bundles: [searchListingUsEnglishLocaleBundle],
+    },
     schema: {
       types: [searchListingType],
     },

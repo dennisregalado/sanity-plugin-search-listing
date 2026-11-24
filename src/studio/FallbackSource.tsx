@@ -2,10 +2,11 @@ import {Box, Card, Stack, Text} from '@sanity/ui'
 import {Popover} from '@sanity/ui/popover'
 import {Tooltip} from '@sanity/ui/tooltip'
 import React from 'react'
-import {Preview, useDocumentStore, useFormValue, useSchema} from 'sanity'
+import {Preview, useDocumentStore, useFormValue, useSchema, useTranslation} from 'sanity'
 import {useIntentLink} from 'sanity/router'
 
 import {type NormalizedSource, splitDocumentQuery} from '../fallbacks'
+import {searchListingLocaleNamespace} from '../i18n'
 import {getCanonicalDocumentId} from '../resolveSlug'
 import {API_VERSION} from './constants'
 import type {StudioFormDocument} from './types'
@@ -40,6 +41,7 @@ export function FallbackSource({
 }) {
   const document = useFormValue([]) as StudioFormDocument
   const schema = useSchema()
+  const {t} = useTranslation(searchListingLocaleNamespace)
   const sourceDocument = useFallbackSourceDocument(source, document)
   const sourceSchemaType = sourceDocument ? schema.get(sourceDocument.type) : undefined
 
@@ -50,7 +52,7 @@ export function FallbackSource({
           <Stack gap={2}>
             <Box paddingX={2} paddingTop={2}>
               <Text size={1} weight="medium">
-                Fallback image from
+                {t('fallback-image.from-document')}
               </Text>
             </Box>
             <FallbackSourceLink {...sourceDocument} schemaType={sourceSchemaType} />
@@ -77,7 +79,7 @@ export function FallbackSource({
       placement="top"
       content={
         <Text size={1} weight="medium">
-          {from ? `Fallback image from ${from}` : 'Fallback image'}
+          {from ? t('fallback-image.from-source', {source: from}) : t('fallback-image.tooltip')}
         </Text>
       }
       portal

@@ -17,7 +17,8 @@ npm run screenshot -- product-preview page-editing --dark --out=/some/dir
   Playwright page. Mutations are accepted but not stored; typed values still show, since the
   Studio applies edits locally.
 - `scenarios.mjs` – what to capture. Add a scenario for every visual change and capture it
-  before and after.
+  before and after. The `nb-*` scenarios open the Studio in `studio/nbLocale.ts`, a demo
+  Norwegian locale with the plugin's strings translated (Sanity's own stay English).
 
 `--full` captures the whole window instead of the `seo` field. Opening the Studio in a plain
 browser does not work: it only has data under Playwright, where the API is mocked.

@@ -1,7 +1,8 @@
 /**
  * Screenshot scenarios: a Studio path, optional interactions, and the field to capture
  * (`field`, default `seo`, is waited for; `capture` names another field to capture).
- * `documents` replaces the fixtures for one scenario. Add one for each visual change.
+ * `documents` replaces the fixtures for one scenario; `locale` picks the Studio's language (such
+ * as `nb-NO`, the workbench's demo locale). Add one for each visual change.
  *
  * `run({page, field})` receives the Playwright page and the `seo` field's locator.
  */
@@ -103,4 +104,24 @@ scenarios.push(
       await page.waitForTimeout(800)
     },
   },
+)
+
+// The workbench's demo Norwegian locale (`studio/nbLocale.ts`): the plugin's strings translated.
+const nb = (scenario) => ({...scenario, name: `nb-${scenario.name}`, locale: 'nb-NO'})
+scenarios.push(
+  ...scenarios
+    .filter((scenario) =>
+      [
+        'page-preview',
+        'page-editing',
+        'page-validation-closed',
+        'page-validation-tooltip',
+        'page-handle-moved',
+        'page-error',
+        'page-popover-keyboard',
+        'home-editing',
+        'product-preview',
+      ].includes(scenario.name),
+    )
+    .map(nb),
 )

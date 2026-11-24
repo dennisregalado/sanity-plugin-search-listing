@@ -30,6 +30,8 @@
 - The fallback-source popover opens from the keyboard (focus, Escape, Tab to the link).
 - The URL prefix in the handle field follows the theme (dark mode).
 - Edit mode no longer depends on CSS against Studio internals.
+- Duplicating a document whose `seo` field uses a named subtype (`productSeo`) kept its URL handle.
+- The listing showed a typed handle percent-encoded (`Join%20Us!`).
 
 ## 2.0.0 - 2026-11-16
 
