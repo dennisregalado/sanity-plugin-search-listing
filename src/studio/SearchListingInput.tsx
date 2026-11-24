@@ -1,5 +1,5 @@
 import {EditIcon} from '@sanity/icons/Edit'
-import {Box, Button, Stack, Text} from '@sanity/ui'
+import {Button, Flex, Stack, Text} from '@sanity/ui'
 import {Tooltip} from '@sanity/ui/tooltip'
 import React from 'react'
 import {
@@ -22,9 +22,17 @@ import {
   SiteNameContext,
   SlugFallbackContext,
 } from './contexts'
+import {
+  getHiddenProblems,
+  getHighestLevel,
+  getLevelTone,
+  type HiddenProblem,
+  isFocusOnHiddenMember,
+} from './editMode'
 import {FallbackImage, FallbackSource} from './FallbackSource'
 import {useFallbacks, useResolvedSlugFallback} from './hooks'
 import {getFieldOptions, getPathPrefixFromOptions, resolveFieldOptions} from './options'
+import {FallbackImageContext} from './SearchListingImage'
 import {SearchListingPreview} from './SearchListingPreview'
 import type {StudioFormDocument} from './types'
 import {getFallbackImageValue, getImageOnlyValue, hasImage} from './utils'
@@ -34,17 +42,18 @@ export type SearchListingInputProps = ObjectInputProps & {
   pluginFallbacks?: SearchListingFallbacks
 }
 
-export const SEO_STUDIO_FIELD_STYLES = `
-[data-testid="field-actions-menu-seo"],
-[data-testid="field-actions-menu-seo"] + div {
-  transform: translateX(-25px);
+/** The Edit toggle's user-facing strings. */
+const EDIT_TOGGLE_STRINGS = {
+  edit: 'Edit',
+  done: 'Done',
+  editLabel: 'Edit listing',
+  doneLabel: 'Done editing',
+  levelHeading: {
+    error: 'Fix before publishing',
+    warning: 'Needs attention',
+    info: 'Notes',
+  },
 }
-
-.seo-image-field div:has(> img[data-testid="hotspot-image-input"]) {
-  aspect-ratio: 1200 / 630 !important;
-  max-height: min-content !important;
-}
-`
 
 export function SearchListingField(props: ObjectFieldProps) {
   const pathPrefix = getPathPrefixFromOptions(props.schemaType.options) || '/'
@@ -74,32 +83,6 @@ export function SearchListingInput(props: SearchListingInputProps) {
     fieldOptions.fallbacks as SearchListingFallbacks | undefined,
     props.pluginFallbacks,
   )
-  const [isEditing, setIsEditing] = React.useState(false)
-  const client = useClient({apiVersion: API_VERSION})
-  const {projectId, dataset} = client.config()
-  // While previewing (not in edit mode), a listing with no image of its own shows its fallback.
-  // A Sanity image fallback is shown in the image field itself: the field's member is handed a
-  // stand-in value pointing at the fallback's asset, so it renders filled while the document
-  // stays empty, and Upload or Select writes a real image. Any other fallback (a URL) is shown
-  // as a plain image in place of the field. Edit mode always shows the document's own field.
-  const showFallback = !isEditing && !hasImage(props.value) && Boolean(fallbacks.image)
-  const fallbackImage = showFallback ? getFallbackImageValue(fallbacks.image?.value) : undefined
-  const fallbackImageUrl =
-    showFallback && !fallbackImage
-      ? getImageUrl(fallbacks.image?.value, {projectId, dataset}) || undefined
-      : undefined
-  const handleEditToggle = React.useCallback(() => {
-    setIsEditing((value) => !value)
-  }, [])
-  const imageMembers = React.useMemo(() => {
-    const members = props.members.filter(isImageMember)
-    if (!fallbackImage) return members
-    return members.map((member) =>
-      member.kind === 'field'
-        ? ({...member, field: {...member.field, value: fallbackImage}} as ObjectMember)
-        : member,
-    )
-  }, [props.members, fallbackImage])
   const metadataMembers = React.useMemo(
     () =>
       props.members.filter(
@@ -107,6 +90,35 @@ export function SearchListingInput(props: SearchListingInputProps) {
       ),
     [props.members, hasHandle],
   )
+  // Title, description and URL handle only render in edit mode, so their validation is
+  // surfaced on the toggle while it's closed.
+  const hiddenProblems = React.useMemo(() => getHiddenProblems(metadataMembers), [metadataMembers])
+  const hasHiddenError = getHighestLevel(hiddenProblems) === 'error'
+
+  const hiddenOnFocus = isFocusOnHiddenMember(props.focusPath)
+  const [isEditing, setIsEditing] = useEditMode({hiddenOnFocus, hasHiddenError})
+
+  const client = useClient({apiVersion: API_VERSION})
+  const {projectId, dataset} = client.config()
+  // While previewing (not in edit mode), a listing with no image of its own shows its fallback.
+  // A Sanity image fallback is shown in the image field itself: its input (see
+  // `SearchListingImageInput`) is handed a stand-in value pointing at the fallback's asset, so it
+  // renders filled while the document stays empty. Only Upload or Select write, a real image. Any other fallback (a URL) is shown
+  // as a plain image in place of the field. Edit mode always shows the document's own field.
+  const showFallback = !isEditing && !hasImage(props.value) && Boolean(fallbacks.image)
+  const fallbackImage = showFallback ? getFallbackImageValue(fallbacks.image?.value) : undefined
+  const fallbackImageUrl =
+    showFallback && !fallbackImage
+      ? getImageUrl(fallbacks.image?.value, {projectId, dataset}) || undefined
+      : undefined
+  const {onPathFocus} = props
+  const handleEditToggle = React.useCallback(() => {
+    setIsEditing((value) => !value)
+    // Closing hides the focused field: move focus to the listing itself, so a later
+    // validation click on the same field opens edit mode again.
+    if (isEditing && hiddenOnFocus) onPathFocus([])
+  }, [isEditing, hiddenOnFocus, onPathFocus, setIsEditing])
+  const imageMembers = React.useMemo(() => props.members.filter(isImageMember), [props.members])
 
   let imageField: React.ReactNode
   if (fallbackImageUrl) {
@@ -115,18 +127,22 @@ export function SearchListingInput(props: SearchListingInputProps) {
         <FallbackImage url={fallbackImageUrl} />
       </FallbackSource>
     )
-  } else if (fallbackImage) {
-    imageField = (
-      <FallbackSource source={fallbacks.image!.source}>
-        {props.renderDefault({...props, members: imageMembers, value: {image: fallbackImage}})}
-      </FallbackSource>
-    )
   } else {
-    imageField = props.renderDefault({
-      ...props,
-      members: imageMembers,
-      value: getImageOnlyValue(props.value),
-    })
+    // The image input reads the stand-in from `FallbackImageContext` and guards its writes.
+    const imageInput = (
+      <FallbackImageContext.Provider value={fallbackImage}>
+        {props.renderDefault({
+          ...props,
+          members: imageMembers,
+          value: getImageOnlyValue(props.value),
+        })}
+      </FallbackImageContext.Provider>
+    )
+    imageField = fallbackImage ? (
+      <FallbackSource source={fallbacks.image!.source}>{imageInput}</FallbackSource>
+    ) : (
+      imageInput
+    )
   }
 
   return (
@@ -136,36 +152,23 @@ export function SearchListingInput(props: SearchListingInputProps) {
           <HasHandleContext.Provider value={hasHandle}>
             <FallbacksContext.Provider value={fallbacks}>
               <FieldOptionsContext.Provider value={resolvedOptions}>
-                <style>{SEO_STUDIO_FIELD_STYLES}</style>
-                <Stack gap={5}>
-                  <Box style={{position: 'absolute', top: 0, right: 0}}>
-                    <Tooltip
-                      animate
-                      delay={5}
-                      placement="top"
-                      content={
-                        <Text size={1} weight="medium">
-                          Edit listing
-                        </Text>
-                      }
-                      portal
-                    >
-                      <Button
-                        mode="bleed"
-                        icon={EditIcon}
-                        padding={2}
-                        onClick={handleEditToggle}
-                        selected={isEditing}
-                      />
-                    </Tooltip>
-                  </Box>
-                  {imageField}
-                  <SearchListingPreview />
-                  {isEditing &&
-                    props.renderDefault({
-                      ...props,
-                      members: metadataMembers,
-                    })}
+                <Stack gap={3}>
+                  <Flex justify="flex-end">
+                    <EditToggle
+                      isEditing={isEditing}
+                      problems={hiddenProblems}
+                      onToggle={handleEditToggle}
+                    />
+                  </Flex>
+                  <Stack gap={5}>
+                    {imageField}
+                    <SearchListingPreview />
+                    {isEditing &&
+                      props.renderDefault({
+                        ...props,
+                        members: metadataMembers,
+                      })}
+                  </Stack>
                 </Stack>
               </FieldOptionsContext.Provider>
             </FallbacksContext.Provider>
@@ -173,6 +176,93 @@ export function SearchListingInput(props: SearchListingInputProps) {
         </SlugFallbackContext.Provider>
       </PathPrefixContext.Provider>
     </SiteNameContext.Provider>
+  )
+}
+
+/**
+ * Whether edit mode is open, and its setter. It opens when focus moves into a hidden member
+ * (a validation panel click, a link, presence), so the field it points to is rendered, and
+ * when a hidden member gets an error. Each opens it once, when it starts: the editor can still
+ * close it. Warnings never open it; they only tint the toggle.
+ */
+function useEditMode({
+  hiddenOnFocus,
+  hasHiddenError,
+}: {
+  hiddenOnFocus: boolean
+  hasHiddenError: boolean
+}) {
+  const [isEditing, setIsEditing] = React.useState(hiddenOnFocus || hasHiddenError)
+  const [previous, setPrevious] = React.useState({hiddenOnFocus, hasHiddenError})
+
+  // Adjusted while rendering, not in an effect: the field it opens renders in the same pass.
+  if (previous.hiddenOnFocus !== hiddenOnFocus || previous.hasHiddenError !== hasHiddenError) {
+    setPrevious({hiddenOnFocus, hasHiddenError})
+    if (
+      (hiddenOnFocus && !previous.hiddenOnFocus) ||
+      (hasHiddenError && !previous.hasHiddenError)
+    ) {
+      setIsEditing(true)
+    }
+  }
+
+  return [isEditing, setIsEditing] as const
+}
+
+/**
+ * Opens and closes edit mode. While closed, it takes the tone of the most severe problem on
+ * the hidden fields and lists them in its tooltip.
+ */
+export function EditToggle({
+  isEditing,
+  problems,
+  onToggle,
+}: {
+  isEditing: boolean
+  problems: readonly HiddenProblem[]
+  onToggle: () => void
+}) {
+  const shownProblems = isEditing ? [] : problems
+  const level = getHighestLevel(shownProblems)
+  const label = isEditing ? EDIT_TOGGLE_STRINGS.doneLabel : EDIT_TOGGLE_STRINGS.editLabel
+
+  return (
+    <Tooltip
+      animate
+      delay={5}
+      placement="top"
+      portal
+      content={
+        <Stack gap={3} padding={1} style={{maxWidth: 320}}>
+          <Text size={1} weight="medium">
+            {label}
+          </Text>
+          {level && (
+            <Text size={1} muted>
+              {EDIT_TOGGLE_STRINGS.levelHeading[level]}
+            </Text>
+          )}
+          {shownProblems.map((problem) => (
+            <Text key={`${problem.title}\n${problem.message}`} size={1}>
+              {problem.title}: {problem.message}
+            </Text>
+          ))}
+        </Stack>
+      }
+    >
+      <Button
+        mode={level ? 'ghost' : 'bleed'}
+        tone={getLevelTone(level)}
+        icon={EditIcon}
+        text={isEditing ? EDIT_TOGGLE_STRINGS.done : EDIT_TOGGLE_STRINGS.edit}
+        fontSize={1}
+        padding={2}
+        onClick={onToggle}
+        selected={isEditing}
+        aria-label={label}
+        aria-pressed={isEditing}
+      />
+    </Tooltip>
   )
 }
 
