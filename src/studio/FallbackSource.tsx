@@ -26,7 +26,7 @@ export function FallbackImage({url}: {url: string}) {
 }
 
 /**
- * Marks the listing's image as borrowed, on hover over the whole field. A fallback from another
+ * Marks the listing's image as borrowed, on hover over (or focus within) the whole field. A fallback from another
  * document (a query such as `*[_type == "settings"][0].seo.image`) opens a popover with that
  * document's preview, linking to the field. One read from this document (such as Shopify's
  * `store.previewImageUrl`) names the field in a tooltip.
@@ -147,9 +147,15 @@ export function FallbackSourceLink({
   )
 }
 
+/** Elements that take keyboard focus. */
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
 /**
  * A popover that opens on hover like a tooltip but stays open while the pointer moves into
- * it, so its link can be clicked.
+ * it, so its link can be clicked. It also opens when focus moves into the field and closes on
+ * Escape or when focus leaves both the field and the popover. It is rendered in place (not in a
+ * portal), right after the field, so Tab moves from the field into its link.
  */
 export function FallbackSourcePopover({
   content,
@@ -159,6 +165,10 @@ export function FallbackSourcePopover({
   children: React.ReactNode
 }) {
   const [open, setOpen] = React.useState(false)
+  const [trigger, setTrigger] = React.useState<HTMLDivElement | null>(null)
+  const contentRef = React.useRef<HTMLDivElement | null>(null)
+  // Set by Escape: focus moving within the field doesn't reopen it until focus leaves.
+  const dismissed = React.useRef(false)
   const timer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const schedule = React.useCallback((next: boolean, delay: number) => {
     clearTimeout(timer.current)
@@ -168,23 +178,62 @@ export function FallbackSourcePopover({
   const hide = React.useCallback(() => schedule(false, 200), [schedule])
   React.useEffect(() => () => clearTimeout(timer.current), [])
 
-  return (
-    <Popover
-      animate
-      open={open}
-      placement="top"
-      portal
-      content={
-        <Box padding={1} style={{minWidth: 260}} onMouseEnter={show} onMouseLeave={hide}>
-          {content}
-        </Box>
+  const handleFocus = React.useCallback(() => {
+    if (!dismissed.current) show()
+  }, [show])
+  const handleBlur = React.useCallback(
+    (event: React.FocusEvent) => {
+      if (isWithin(event.relatedTarget, [trigger, contentRef.current])) return
+      dismissed.current = false
+      hide()
+    },
+    [hide, trigger],
+  )
+  const handleKeyDown = React.useCallback(
+    (event: React.KeyboardEvent) => {
+      if (event.key !== 'Escape' || !open) return
+      dismissed.current = true
+      clearTimeout(timer.current)
+      setOpen(false)
+      // Focus on the link would be lost with the popover: hand it back to the field.
+      if (isWithin(event.target, [contentRef.current])) {
+        trigger?.querySelector<HTMLElement>(FOCUSABLE)?.focus()
       }
-    >
-      <Box onMouseEnter={show} onMouseLeave={hide}>
+    },
+    [open, trigger],
+  )
+  const handlers = {
+    onMouseEnter: show,
+    onMouseLeave: hide,
+    onFocus: handleFocus,
+    onBlur: handleBlur,
+    onKeyDown: handleKeyDown,
+  }
+
+  return (
+    <>
+      <Box ref={setTrigger} {...handlers}>
         {children}
       </Box>
-    </Popover>
+      {/* After the field in the DOM, so Tab moves from the field into the popover's link. */}
+      <Popover
+        animate
+        open={open}
+        placement="top"
+        referenceElement={trigger}
+        content={
+          <Box ref={contentRef} padding={1} style={{minWidth: 260}} {...handlers}>
+            {content}
+          </Box>
+        }
+      />
+    </>
   )
+}
+
+/** Whether `target` (such as a blur's `relatedTarget`) is inside one of `elements`. */
+function isWithin(target: EventTarget | null, elements: Array<HTMLElement | null>): boolean {
+  return target instanceof Node && elements.some((element) => element?.contains(target))
 }
 
 /** `store.previewImageUrl` as the schema's field titles: "Shopify › Preview image URL". */

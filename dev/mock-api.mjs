@@ -68,7 +68,11 @@ function parseParams(url) {
 }
 
 /** Install the mocked API on `page`. Returns the in-memory dataset. */
-export async function installMockApi(page, {documents = fixtures} = {}) {
+/**
+ * `onMutate(body)` receives each mutation request's parsed body, to check what an
+ * interaction would write.
+ */
+export async function installMockApi(page, {documents = fixtures, onMutate} = {}) {
   const store = structuredClone(documents)
 
   // Listeners: the client reads server-sent events through `fetch`. Answer them in the page
@@ -183,7 +187,15 @@ export async function installMockApi(page, {documents = fixtures} = {}) {
       }
     }
 
-    if (path.startsWith('/data/mutate/')) {
+    // Uploads: every image upload resolves to the fixtures' image asset.
+    if (path.startsWith('/assets/images/')) {
+      const asset = store.find((doc) => doc._type === 'sanity.imageAsset')
+      return route.fulfill({json: {document: asset}})
+    }
+
+    // Writes: classic mutations and the Actions API the Studio uses for drafts.
+    if (path.startsWith('/data/mutate/') || path.startsWith('/data/actions/')) {
+      onMutate?.(request.postDataJSON())
       return route.fulfill({json: {transactionId: `tx-${Date.now()}`, results: []}})
     }
 

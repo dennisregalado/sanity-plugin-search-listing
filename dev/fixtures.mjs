@@ -80,6 +80,15 @@ export const documents = [
     },
   },
   {
+    _id: 'page-error',
+    _type: 'page',
+    _createdAt: now,
+    _updatedAt: now,
+    _rev: 'r1',
+    title: 'Careers',
+    seo: {_type: 'seo', url: {_type: 'slug', current: 'Join Us!'}},
+  },
+  {
     _id: 'page-empty',
     _type: 'page',
     _createdAt: now,

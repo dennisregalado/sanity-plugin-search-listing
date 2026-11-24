@@ -5,7 +5,6 @@ import {
   defineType,
   type DocumentActionComponent,
   type DuplicateActionProps,
-  type ObjectFieldProps,
   type ObjectInputProps,
 } from 'sanity'
 
@@ -13,6 +12,7 @@ import {prepareDuplicate} from './duplicate'
 import {isValidUrlHandle} from './resolveSlug'
 import {HomePageTitleField, PlaceholderInput, UrlHandleInput} from './studio/inputs'
 import {getValidationFieldOptions} from './studio/options'
+import {SearchListingImageField, SearchListingImageInput} from './studio/SearchListingImage'
 import {
   SearchListingField,
   SearchListingInput,
@@ -52,9 +52,8 @@ export const searchListing = definePlugin<SearchListingPluginOptions | void>((op
         title: 'Image',
         type: 'image',
         components: {
-          field: (props: ObjectFieldProps) => {
-            return <div className="seo-image-field">{props.children}</div>
-          },
+          field: SearchListingImageField,
+          input: SearchListingImageInput,
         },
       }),
       defineField({
