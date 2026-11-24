@@ -11,5 +11,13 @@
     "plugin:react-hooks/recommended",
     "plugin:prettier/recommended",
     "plugin:react/jsx-runtime"
+  ],
+  "overrides": [
+    {
+      "files": ["src/studio/**"],
+      "rules": {
+        "@typescript-eslint/explicit-module-boundary-types": "off"
+      }
+    }
   ]
 }
