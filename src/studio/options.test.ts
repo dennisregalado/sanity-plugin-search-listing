@@ -4,6 +4,7 @@ import {describe, expect, test} from 'vitest'
 import {
   findSeoTypeAtPath,
   getFieldOptions,
+  getSeoFieldNames,
   getSeoTypeOptions,
   getValidationFieldOptions,
   isSeoType,
@@ -172,5 +173,31 @@ describe('getFieldOptions', () => {
       ),
     ).toEqual({maxLength: {description: 90}})
     expect(getFieldOptions({path: ['seo']}, schema as never, undefined)).toEqual({})
+  })
+})
+
+describe('getSeoFieldNames', () => {
+  test('finds seo fields and fields of a named seo subtype', () => {
+    const doc = Schema.compile({
+      name: 'dup',
+      types: [
+        {name: 'seo', type: 'object', fields: [{name: 'title', type: 'string'}]},
+        {name: 'productSeo', type: 'seo'},
+        {
+          name: 'product',
+          type: 'document',
+          fields: [
+            {name: 'title', type: 'string'},
+            {name: 'seo', type: 'productSeo'},
+            {name: 'share', type: 'seo'},
+          ],
+        },
+      ],
+    }).get('product')
+    expect(getSeoFieldNames(doc)).toEqual(['seo', 'share'])
+  })
+
+  test('is empty for a type without fields', () => {
+    expect(getSeoFieldNames(undefined)).toEqual([])
   })
 })

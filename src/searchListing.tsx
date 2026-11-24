@@ -11,7 +11,7 @@ import {
 import {prepareDuplicate} from './duplicate'
 import {isValidUrlHandle} from './resolveSlug'
 import {HomePageTitleField, PlaceholderInput, UrlHandleInput} from './studio/inputs'
-import {getValidationFieldOptions} from './studio/options'
+import {getSeoFieldNames, getValidationFieldOptions} from './studio/options'
 import {SearchListingImageField, SearchListingImageInput} from './studio/SearchListingImage'
 import {
   SearchListingField,
@@ -164,13 +164,6 @@ function warnRegisteredBeforeStructureTool() {
     'sanity-plugin-search-listing: register searchListing() after structureTool() in `plugins`, ' +
       'or duplicating a document copies its URL handle. Pass `duplicate: false` to silence this.',
   )
-}
-
-/** Names of the document's top-level fields of type `seo`. */
-function getSeoFieldNames(schemaType: unknown): string[] {
-  const fields = (schemaType as {fields?: Array<{name: string; type?: {name?: string}}>})?.fields
-  if (!Array.isArray(fields)) return []
-  return fields.filter((field) => field.type?.name === 'seo').map((field) => field.name)
 }
 
 function withoutUrlOnDuplicate(

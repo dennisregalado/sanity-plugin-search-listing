@@ -23,7 +23,7 @@ npm run screenshot -- product-preview page-editing --dark --out=/some/dir
 browser does not work: it only has data under Playwright, where the API is mocked.
 
 Known mock limits: list search (`text::query`) matches everything, nothing is saved (edits stay
-in the form), uploads are not mocked, and listeners only send `welcome`. The Sanity version
+in the form), and listeners only send `welcome`. The Sanity version
 check logs a console error; ignore it.
 
 After switching branches or merging, restart `npm run dev:studio`: Vite can keep serving a

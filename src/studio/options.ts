@@ -203,3 +203,13 @@ function normalizePathPrefix(pathPrefix: unknown) {
   const trimmed = pathPrefix.trim()
   return trimmed || '/'
 }
+
+/**
+ * Names of the document's top-level fields of type `seo` or a subtype of it (`productSeo`),
+ * whose URL handle the duplicate guard leaves out.
+ */
+export function getSeoFieldNames(schemaType: unknown): string[] {
+  const fields = (schemaType as {fields?: Array<{name: string; type?: unknown}>})?.fields
+  if (!Array.isArray(fields)) return []
+  return fields.filter((field) => isSeoType(field.type)).map((field) => field.name)
+}
