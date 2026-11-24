@@ -18,11 +18,13 @@ import {
   SearchListingInput,
   type SearchListingInputProps,
 } from './studio/SearchListingInput'
+import {resolveSiteUrlOption} from './studio/utils'
 import {isUrlHandleUnique} from './studio/validation'
 import type {SearchListingPluginOptions} from './types'
 
 export const searchListing = definePlugin<SearchListingPluginOptions | void>((options) => {
   const siteName = options?.siteName
+  const siteUrl = resolveSiteUrlOption(options?.siteUrl, 'plugin')
   const pluginFallbacks = options?.fallbacks
   const duplicateOption = options?.duplicate ?? true
   const duplicateOmit =
@@ -40,6 +42,7 @@ export const searchListing = definePlugin<SearchListingPluginOptions | void>((op
         React.createElement(SearchListingInput, {
           ...props,
           siteName,
+          siteUrl,
           pluginFallbacks,
         } as SearchListingInputProps),
     },

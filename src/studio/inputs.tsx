@@ -8,8 +8,9 @@ import {
   FieldOptionsContext,
   PathPrefixContext,
   SlugFallbackContext,
+  useSiteUrl,
 } from './contexts'
-import {clipText, getFieldText, getHost, getUrlPreview} from './utils'
+import {clipText, getFieldText, getUrlPreview} from './utils'
 
 export function HomePageTitleField(props: StringFieldProps) {
   const {home} = React.useContext(FieldOptionsContext)
@@ -25,6 +26,7 @@ export function PlaceholderInput(props: StringInputProps) {
   const fieldName = getFieldName(props)
   const options = React.useContext(FieldOptionsContext)
   const isHome = options.home
+  const siteUrl = useSiteUrl()
   const fallbacks = React.useContext(FallbacksContext)
   const maxLength =
     fieldName === 'description' ? options.maxLength.description : options.maxLength.title
@@ -39,9 +41,9 @@ export function PlaceholderInput(props: StringInputProps) {
   }, [fallbacks, fieldName, isHome, maxLength])
 
   const placeholder = React.useMemo(() => {
-    if (isHome) return fieldName === 'description' ? HOME_DESCRIPTION_PLACEHOLDER : getHost()
+    if (isHome) return fieldName === 'description' ? HOME_DESCRIPTION_PLACEHOLDER : siteUrl
     return fallbackText
-  }, [fallbackText, fieldName, isHome])
+  }, [fallbackText, fieldName, isHome, siteUrl])
 
   // Only what is typed counts; the fallback is not the field's value.
   const count = (props.value ?? '').length
@@ -83,6 +85,7 @@ export function PlaceholderInput(props: StringInputProps) {
 export function UrlHandleInput(props: SlugInputProps) {
   const pathPrefix = React.useContext(PathPrefixContext)
   const slugFallback = React.useContext(SlugFallbackContext)
+  const siteUrl = useSiteUrl()
   const [isEditing, setIsEditing] = React.useState(false)
   const [hasTyped, setHasTyped] = React.useState(false)
 
@@ -151,7 +154,7 @@ export function UrlHandleInput(props: SlugInputProps) {
         </Text>
       </Box>
       <Text size={1} muted>
-        {getUrlPreview(previewValue, pathPrefix)}
+        {getUrlPreview(previewValue, pathPrefix, siteUrl)}
       </Text>
     </Stack>
   )

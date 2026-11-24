@@ -19,7 +19,7 @@ import {
   FieldOptionsContext,
   HasHandleContext,
   PathPrefixContext,
-  SiteNameContext,
+  SiteProvider,
   SlugFallbackContext,
 } from './contexts'
 import {FallbackImage, FallbackSource} from './FallbackSource'
@@ -27,10 +27,12 @@ import {useFallbacks, useResolvedSlugFallback} from './hooks'
 import {getFieldOptions, getPathPrefixFromOptions, resolveFieldOptions} from './options'
 import {SearchListingPreview} from './SearchListingPreview'
 import type {StudioFormDocument} from './types'
-import {getFallbackImageValue, getImageOnlyValue, hasImage} from './utils'
+import {getFallbackImageValue, getImageOnlyValue, hasImage, resolveSiteUrlOption} from './utils'
 
 export type SearchListingInputProps = ObjectInputProps & {
   siteName?: string
+  /** The plugin's `siteUrl`, normalized. */
+  siteUrl?: string
   pluginFallbacks?: SearchListingFallbacks
 }
 
@@ -62,6 +64,7 @@ export function SearchListingInput(props: SearchListingInputProps) {
   const fieldPathPrefix = React.useContext(PathPrefixContext)
   const fieldOptions = getFieldOptions(props, schema, document?._type)
   const pathPrefix = getPathPrefixFromOptions(fieldOptions) || fieldPathPrefix || '/'
+  const siteUrl = resolveSiteUrlOption(fieldOptions.siteUrl, 'field') ?? props.siteUrl ?? null
   const resolvedOptions = React.useMemo(() => resolveFieldOptions(fieldOptions), [fieldOptions])
   // `home` and `handle: false` mark a document that lives at a fixed URL (its `pathPrefix`).
   const hasHandle = resolvedOptions.hasHandle
@@ -130,7 +133,7 @@ export function SearchListingInput(props: SearchListingInputProps) {
   }
 
   return (
-    <SiteNameContext.Provider value={props.siteName ?? null}>
+    <SiteProvider siteName={props.siteName ?? null} siteUrl={siteUrl}>
       <PathPrefixContext.Provider value={pathPrefix}>
         <SlugFallbackContext.Provider value={slugFallback}>
           <HasHandleContext.Provider value={hasHandle}>
@@ -172,7 +175,7 @@ export function SearchListingInput(props: SearchListingInputProps) {
           </HasHandleContext.Provider>
         </SlugFallbackContext.Provider>
       </PathPrefixContext.Provider>
-    </SiteNameContext.Provider>
+    </SiteProvider>
   )
 }
 

@@ -9,6 +9,9 @@ export default defineConfig({
   title: 'Workbench',
   projectId: 'mock1234',
   dataset: 'production',
-  plugins: [structureTool(), searchListing({siteName: 'Acme Store'})],
+  plugins: [
+    structureTool(),
+    searchListing({siteName: 'Acme Store', siteUrl: 'https://acme.example'}),
+  ],
   schema: {types: schemaTypes},
 })
