@@ -1,3 +1,4 @@
+import {getPathValue} from './resolveSlug'
 import type {
   SearchListingFallbacks,
   SearchListingFallbackSource,
@@ -75,17 +76,8 @@ export function getQueryKey(source: Extract<NormalizedSource, {kind: 'query'}>):
   return JSON.stringify([source.query, source.params])
 }
 
-/** `store.slug.current` on a plain object. Arrays are indexed by number: `images.0`. */
-export function getPathValue(document: unknown, path: string): unknown {
-  let value: unknown = document
-
-  for (const key of path.split('.')) {
-    if (!value || typeof value !== 'object') return undefined
-    value = (value as Record<string, unknown>)[key]
-  }
-
-  return value
-}
+/** Re-exported: the Studio reads fallback paths with the same reader as the slug rules. */
+export {getPathValue}
 
 /** Whether a fallback value is worth showing. */
 export function hasFallbackValue(value: unknown): value is SearchListingFallbackValue {

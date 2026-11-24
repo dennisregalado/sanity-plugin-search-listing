@@ -5,9 +5,11 @@
  * `sanity.blueprint.ts`.
  */
 import {
+  DEFAULT_SLUG_CURRENT,
   DEFAULT_SLUG_SOURCE,
   getCanonicalDocumentId,
   getPathsProjection,
+  getPathValue,
   getSlugCandidatesQuery,
   getSlugCurrent,
   isSlugTaken,
@@ -67,9 +69,19 @@ function typeList(types: readonly string[]): string {
   return `[${types.map((type) => `'${type}'`).join(', ')}]`
 }
 
+/** The slug fields the Functions use, with the defaults applied and the paths validated. */
+function getSlugPaths(slug?: SlugOptions): {source: string[]; current: string[]} {
+  const source = slug?.source?.length ? slug.source : DEFAULT_SLUG_SOURCE
+  const current = slug?.current?.length ? slug.current : DEFAULT_SLUG_CURRENT
+  // Throws on anything that is not a dot path, before it reaches a filter.
+  getPathsProjection([...source, ...current])
+  return {source, current}
+}
+
 /**
- * The `event` of the `auto-slug` Document Function, for the types routed by `slug.current`.
- * Never list Shopify products or collections: they are routed by `store.slug`.
+ * The `event` of the `auto-slug` Document Function, for the types routed by their own slug
+ * field: `slug.current`, or the first of the `current` paths. Never list Shopify products or
+ * collections: Sanity Connect writes `store.slug` itself.
  *
  * The filter describes a state, not a change: a published document whose handle differs
  * from its slug, or that has neither. The function's own patch leaves it in sync, so it does
@@ -79,25 +91,42 @@ function typeList(types: readonly string[]): string {
  */
 export function autoSlugEvent(
   types: readonly string[],
-  /** The fields a slug is derived from, as in the Studio's `slug.source` option. */
-  slug?: Pick<SlugOptions, 'source'>,
+  /**
+   * The Studio's `slug` option: the fields a slug is derived from (`source`), and the slug
+   * fields a document routes on (`current`, dot paths). The first `current` path is the one
+   * the function writes. @defaultValue `{source: ['title', 'name'], current: ['slug']}`
+   */
+  slug?: Pick<SlugOptions, 'source' | 'current'>,
 ): DocumentFunctionEvent<'create' | 'update'> {
-  const source = slug?.source?.length ? slug.source : DEFAULT_SLUG_SOURCE
-  // Validates the paths too, before they reach the filter.
-  const sourceProjection = getPathsProjection(source)
+  const {source, current} = getSlugPaths(slug)
+  const routing = `${current[0]}.current`
+  const hasNoSlug = current.map((path) => `!defined(${path}.current)`).join(' && ')
+  const projection = getPathsProjection([
+    ...source,
+    ...current.map((path) => `${path}.current`),
+    'seo.url.current',
+  ])
   return {
     on: ['create', 'update'] as Array<'create' | 'update'>,
-    filter: `_type in ${typeList(types)} && ((defined(seo.url.current) && seo.url.current != slug.current) || (!defined(seo.url.current) && !defined(slug.current) && defined(coalesce(${source.join(', ')}))))`,
-    projection: `{_id, _createdAt, _type, ${sourceProjection}, slug{current}, seo{url{current}}}`,
+    filter: `_type in ${typeList(types)} && ((defined(seo.url.current) && seo.url.current != ${routing}) || (!defined(seo.url.current) && ${hasNoSlug} && defined(coalesce(${source.join(', ')}))))`,
+    projection: `{_id, _createdAt, _type, ${projection}}`,
   }
 }
 
-/** The `event` of the `auto-redirect` Document Function: a published `slug.current` changed. */
-export function autoRedirectEvent(types: readonly string[]): DocumentFunctionEvent<'update'> {
+/**
+ * The `event` of the `auto-redirect` Document Function: a published routing slug changed.
+ * The routing slug is `slug.current`, or the first of the `current` paths.
+ */
+export function autoRedirectEvent(
+  types: readonly string[],
+  /** The slug fields a document routes on, as in `autoSlugEvent`. */
+  slug?: Pick<SlugOptions, 'current'>,
+): DocumentFunctionEvent<'update'> {
+  const routing = `${getSlugPaths(slug).current[0]}.current`
   return {
     on: ['update'] as Array<'update'>,
-    filter: `_type in ${typeList(types)} && delta::changedAny(slug.current)`,
-    projection: "{_id, _type, 'beforeSlug': before().slug.current, 'slug': after().slug.current}",
+    filter: `_type in ${typeList(types)} && delta::changedAny(${routing})`,
+    projection: `{_id, _type, 'beforeSlug': before().${routing}, 'slug': after().${routing}}`,
   }
 }
 
@@ -111,7 +140,8 @@ export type SyncSlugResult =
   | {status: 'updated'; slug: string; source: 'handle' | 'title'}
 
 /**
- * Keeps `slug.current`, the field the frontend routes on, equal to the URL handle
+ * Keeps the routing slug (`slug.current`, or the first `current` path), the field the
+ * frontend routes on, equal to the URL handle
  * (`seo.url.current`), and gives a published document with neither its title slug, with
  * `-2`, `-3` when that is taken. `document` is the `autoSlugEvent` projection.
  *
@@ -123,18 +153,23 @@ export type SyncSlugResult =
 export async function syncSlug(
   client: FunctionClient,
   document: SlugDocument,
-  /** The fields a slug is derived from; pass the same `source` as to `autoSlugEvent`. */
-  slug?: Pick<SlugOptions, 'source'>,
+  /** The slug fields; pass the same `source` and `current` as to `autoSlugEvent`. */
+  slug?: Pick<SlugOptions, 'source' | 'current'>,
 ): Promise<SyncSlugResult> {
   const documentId = typeof document._id === 'string' ? document._id : ''
   const documentType = typeof document._type === 'string' ? document._type : ''
 
   if (!documentId || !documentType) return skip('No document id or type')
 
+  const {current} = getSlugPaths(slug)
+  const routingPath = current[0]
   const seoUrl = getSlugCurrent(document.seo?.url)
-  const documentSlug = getSlugCurrent(document.slug)
+  const documentSlug = getSlugCurrent(getPathValue(document, routingPath))
+  const ownedSlug = current
+    .map((path) => getSlugCurrent(getPathValue(document, path)))
+    .find(Boolean)
 
-  if (!seoUrl && documentSlug) return skip(`${documentId} keeps slug ${documentSlug}`)
+  if (!seoUrl && ownedSlug) return skip(`${documentId} keeps slug ${ownedSlug}`)
 
   // An editor's handle is normalized; a missing one is derived from the title.
   const handle = seoUrl ? slugify(seoUrl) : ''
@@ -168,19 +203,20 @@ export async function syncSlug(
     {draftId},
   )
 
-  const transaction = client.transaction().patch(documentId, (patch) =>
-    patch
-      .setIfMissing({seo: {_type: 'seo'}})
-      .setIfMissing({'seo.url': {_type: 'slug'}})
-      .setIfMissing({slug: {_type: 'slug'}})
-      .set({'seo.url.current': nextSlug, 'slug.current': nextSlug}),
-  )
+  const transaction = client
+    .transaction()
+    .patch(documentId, (patch) =>
+      withSlugField(
+        patch.setIfMissing({seo: {_type: 'seo'}}).setIfMissing({'seo.url': {_type: 'slug'}}),
+        routingPath,
+      ).set({'seo.url.current': nextSlug, [`${routingPath}.current`]: nextSlug}),
+    )
 
   // A draft opened before this ran still holds the old slug and would restore it on the
   // next publish. Its routing slug follows; a handle the editor has since typed is kept.
   if (draft && documentId !== draftId) {
     transaction.patch(draftId, (patch) => {
-      const next = patch.setIfMissing({slug: {_type: 'slug'}}).set({'slug.current': nextSlug})
+      const next = withSlugField(patch, routingPath).set({[`${routingPath}.current`]: nextSlug})
 
       if (draft.seoUrl && draft.seoUrl !== seoUrl) return next
 
@@ -198,6 +234,18 @@ export async function syncSlug(
     `${documentId}: ${source === 'handle' ? 'synced slug to the URL handle' : 'set slug from the title'} (${nextSlug})`,
   )
   return {status: 'updated', slug: nextSlug, source}
+}
+
+/** Creates the slug object at `path` (`slug`, or `store.slug`) and its parents if missing. */
+function withSlugField(patch: FunctionPatch, path: string): FunctionPatch {
+  const keys = path.split('.')
+  return keys.reduce(
+    (next, _key, index) =>
+      next.setIfMissing({
+        [keys.slice(0, index + 1).join('.')]: index === keys.length - 1 ? {_type: 'slug'} : {},
+      }),
+    patch,
+  )
 }
 
 function skip(reason: string): SyncSlugResult {
