@@ -2,23 +2,24 @@
 name: search-listing-functions
 description: >
   Sanity Functions that persist the URL handle from sanity-plugin-search-listing: auto-slug
-  saves `slug.current` from `seo.url` (or the title), and auto-redirect writes a redirect when
-  a published slug changes, plus the storefront redirect lookup. Use when setting up, debugging
-  or migrating slug generation, URL handles or automatic redirects in a Sanity project.
+  saves the routing slug (`slug.current` by default) from `seo.url` (or the title), and
+  auto-redirect writes a redirect when a published routing slug changes, plus the storefront
+  redirect lookup. Use when setting up, debugging or migrating slug generation,
+  URL handles or automatic redirects in a Sanity project.
 ---
 
 # Search listing functions
 
 The Studio only previews a slug. Two Sanity Functions make it real:
 
-- **auto-slug** keeps `slug.current` (what the frontend routes on) equal to `seo.url.current` (what editors edit), and gives a published document with neither its title slug.
-- **auto-redirect** writes a `redirect` document from the old path to the new one whenever a published `slug.current` changes.
+- **auto-slug** keeps the routing slug, `slug.current` by default (what the frontend routes on), equal to `seo.url.current` (what editors edit), and gives a published document with neither its title slug.
+- **auto-redirect** writes a `redirect` document from the old path to the new one whenever a published routing slug changes.
 
 Do `search-listing-setup` first. You need its inventory: routed types and their path prefixes.
 
 ## Files
 
-The logic ships in `sanity-plugin-search-listing/functions`: `syncSlug`, `syncRedirects`, and the Blueprint events `autoSlugEvent(types)` / `autoRedirectEvent(types)`. A project's Functions are thin handlers around them. Copy from `references/` into the project, then edit the two marked lists:
+The logic ships in `sanity-plugin-search-listing/functions`: `syncSlug`, `syncRedirects`, and the Blueprint events `autoSlugEvent(types, slug)` / `autoRedirectEvent(types, slug)`. A project's Functions are thin handlers around them. Copy from `references/` into the project, then edit the marked constants:
 
 | Reference                 | Destination                                |
 | ------------------------- | ------------------------------------------ |
@@ -32,12 +33,13 @@ Edit:
 
 1. `SLUG_TYPES` in the Blueprint: the routed types. Never Shopify types.
 2. `ROUTE_PREFIXES` in `auto-redirect/index.ts`: the same types, each with its `pathPrefix`.
+3. `SLUG` in the Blueprint and in `auto-slug/index.ts`: the Studio field's `slug` option, when it is not the default. Keep the two the same.
 
 Each function needs its own `package.json` with `@sanity/client`, `@sanity/functions` and `sanity-plugin-search-listing`. Install each function's dependencies inside its folder: the Functions bundler uses the nearest `node_modules`, and without one it picks up the app's build config. Keep the Functions' plugin version in step with the Studio's.
 
 Never reimplement `slugify`, the duplicate rules or the filters: the Studio preview runs the same code, so the saved slug is always the one the editor saw.
 
-**Slug source.** Pass the same `slug.source` the Studio field uses when it is not `title`/`name`: `autoSlugEvent(types, {source: ['headline']})` and `syncSlug(client, event.data, {source: ['headline']})`. Shopify types are never handled here (Shopify owns `store.slug`).
+**Slug fields.** Pass the same `slug` option the Studio field uses (`source`, `current`, dot paths) to all three: `autoSlugEvent(types, slug)`, `autoRedirectEvent(types, slug)` and `syncSlug(client, event.data, slug)`. The defaults are `{source: ['title', 'name'], current: ['slug']}`. The first `current` path is the **routing slug**: auto-slug writes it (creating the object, and its parents, if missing) and auto-redirect watches it. Every `current` path counts as a slug the document already owns. Shopify types are never handled here (Sanity Connect writes `store.slug`).
 
 **Duplicates.** The plugin's Duplicate action (registered after `structureTool()`) appends " Copy" to the title (once) and leaves out `seo.url` and `slug`, so the copy matches the `autoSlugEvent` filter (no handle, no slug) and gets its title slug when published: `homepage-copy`, then `homepage-copy-2`. A copy made another way that kept the original's handle is never invoked, and the Studio's uniqueness check blocks publishing it.
 
@@ -47,13 +49,13 @@ These are deliberate. Keep them when adapting the code.
 
 **auto-slug**
 
-- The Blueprint filter describes a **state** (`seo.url.current != slug.current`, or neither set), not a change. Its own patch leaves the document in sync, so it does not loop. A document that drifts out of sync, for example when a stale draft is published, is repaired on its next publish.
+- The Blueprint filter describes a **state** (`seo.url.current` differs from the routing slug, or no handle and no slug set), not a change. Its own patch leaves the document in sync, so it does not loop. A document that drifts out of sync, for example when a stale draft is published, is repaired on its next publish.
 - It runs on published documents only (the default). Drafts never get a slug written.
 - A handle typed as `Our Story` is saved as `our-story`.
 - A handle another document of the type already owns (as `seo.url`, `slug` or `store.slug`) is refused: nothing is written and an error is logged. The live URL stays put.
-- A document with `slug.current` and no handle is left alone. This keeps legacy URLs.
+- A document with a slug (any `current` path) and no handle is left alone. This keeps legacy URLs.
 - Duplicate titles get `base`, `base-2`, `base-3` in `_createdAt` order.
-- If a draft is open, its `slug.current` is updated in the same transaction so publishing it does not restore the old slug. If the draft already has a handle, that handle is used.
+- If a draft is open, its routing slug is updated in the same transaction so publishing it does not restore the old slug. If the draft already has a handle, that handle is used.
 - The client uses `perspective: 'raw'` so drafts reserve slugs too.
 
 **auto-redirect**

@@ -24,7 +24,8 @@ Answer these from the code, not from assumptions. Write the answers down; later 
 - **Routed types.** Which document types have their own URL, and what is each route? Read the frontend router (e.g. `src/routes/pages/[slug]`, `app/blog/[slug]`). Record `type → path prefix`.
 - **Routing field.** What does each route query on? Usually `slug.current`. Shopify-synced types (Sanity Connect) route on `store.slug.current` and are owned by Shopify.
 - **Fixed-URL documents.** Singletons with one URL (`/`, `/about`, a landing page).
-- **Site-wide settings.** A singleton (`preferences`, `settings`, `siteSettings`) that should hold the default sharing image. The plugin treats types named `preferences`, `site`, `storefront` and `theme` as site-wide: their listing is labelled "Home page title" and has no URL handle.
+- **Site URL.** The production origin (`https://acme.com`), from the frontend's env or deploy config. Several sites in one schema: one origin per type.
+- **Site-wide settings.** A singleton (`preferences`, `settings`, `siteSettings`) that should hold the default sharing image and the site's own listing. Its `seo` field gets `home: true` (labelled "Home page title", no URL handle); type names alone do nothing.
 - **Existing SEO data.** Any type already named `seo` (it collides with the plugin's), and any fields such as `metaTitle`, `ogImage`, `seoDescription` that hold content.
 
 ## 2. Install and register
@@ -46,6 +47,9 @@ export default defineConfig({
     // is titled "… Copy" with its own URL instead of the original's. `duplicate: false` turns that off.
     searchListing({
       siteName: 'Site Name', // defaults to the workspace title
+      // The live site's origin, shown in the preview instead of the Studio's host
+      // (localhost / *.sanity.studio). Must be an absolute http(s) URL, or it is ignored.
+      siteUrl: 'https://acme.com',
       fallbacks: {
         // Site-wide default image, tried after each field's own fallbacks.
         image: {query: '*[_type == "settings"][0].seo.image', label: 'Settings'},
@@ -77,7 +81,17 @@ Field options (`SearchListingFieldOptions`):
 | ------------ | -------------------------------------------------------------------------------------------- |
 | `pathPrefix` | Route before the handle. `/` for top-level pages.                                            |
 | `handle`     | `false` for a fixed-URL document: the preview shows `pathPrefix` alone and the URL field is removed. |
+| `home`       | `true` on the site-wide settings document's listing: no handle, host as URL, "Home page title". |
+| `siteUrl`    | This type's site, overriding the plugin's `siteUrl`, when one schema serves several sites.   |
 | `fallbacks`  | Per-field fallbacks, tried before the plugin's. See below.                                   |
+
+Several types sharing the same options (a route, a preset) can use a named subtype instead of repeating them; a field's own options are merged on top, shallowly:
+
+```ts
+defineType({name: 'productSeo', type: 'seo', options: {pathPrefix: '/products/', ...shopifyProduct}})
+```
+
+An `seo` field nested in an object or array gets its own options too, but the Functions only read a top-level field named `seo`. Put the routed listing there.
 
 ### Routing slug
 
@@ -126,7 +140,7 @@ Work through `migrating.md` in this folder when the project already has slugs, S
 
 ## 5. Verify
 
-- Run the Studio, open one document of each routed type, and check the preview: URL breadcrumb, title, description, image (or fallback with its label).
+- Run the Studio, open one document of each routed type, and check the preview: site URL and breadcrumb, title, description, image (or fallback with its label). The site URL must be the live site, not localhost.
 - Type a handle with a space: the field must show a validation error. Type another document's handle: it must say the slug is in use.
 - Open a fixed-URL document: no URL handle field.
 - Run the schema/type generation the project uses (e.g. `sanity schema extract && sanity typegen generate`).

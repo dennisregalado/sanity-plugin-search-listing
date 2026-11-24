@@ -399,3 +399,87 @@ describe('auto-redirect', () => {
     ])
   })
 })
+
+describe('custom slug fields', () => {
+  const options = {source: ['headline'], current: ['route.slug', 'legacySlug']}
+  const event = autoSlugEvent(['article'], options)
+
+  async function runCustom(id: string) {
+    const doc = find(id)!
+    const matches = await evaluate(parse(`*[${event.filter}]`), {dataset: [doc]})
+    if ((await matches.get()).length !== 1) return false
+    const projected = await evaluate(parse(`*[_id == $id][0]${event.projection}`), {
+      dataset,
+      params: {id},
+    })
+    await syncSlug(client, await projected.get(), options)
+    return true
+  }
+
+  test('the events read the first `current` path, and validate every path', () => {
+    expect(event.filter).toContain('seo.url.current != route.slug.current')
+    expect(event.filter).toContain('!defined(route.slug.current) && !defined(legacySlug.current)')
+    expect(event.projection).toBe(
+      '{_id, _createdAt, _type, headline, route{slug{current}}, legacySlug{current}, seo{url{current}}}',
+    )
+    const redirect = autoRedirectEvent(['article'], {current: ['route.slug']})
+    expect(redirect.filter).toContain('delta::changedAny(route.slug.current)')
+    expect(redirect.projection).toContain("'beforeSlug': before().route.slug.current")
+    expect(() => autoSlugEvent(['article'], {current: ['slug) || true || (x']})).toThrow()
+    expect(() => autoRedirectEvent(['article'], {current: ['a b']})).toThrow()
+  })
+
+  test('the defaults are unchanged', () => {
+    expect(autoSlugEvent(['page']).projection).toBe(
+      '{_id, _createdAt, _type, title, name, slug{current}, seo{url{current}}}',
+    )
+    expect(autoRedirectEvent(['page']).filter).toBe(
+      "_type in ['page'] && delta::changedAny(slug.current)",
+    )
+  })
+
+  test('writes the routing slug at its path, creating its parents', async () => {
+    dataset.push(
+      {_id: 'a', _type: 'article', _createdAt: '2026-01-01', headline: 'Launch Day'},
+      {_id: 'drafts.a', _type: 'article', _createdAt: '2026-01-01', headline: 'Launch Day'},
+      {
+        _id: 'b',
+        _type: 'article',
+        _createdAt: '2026-01-02',
+        headline: 'Launch Day',
+      },
+    )
+
+    expect(await runCustom('a')).toBe(true)
+    expect(find('a')?.route?.slug).toEqual({_type: 'slug', current: 'launch-day'})
+    expect(find('a')?.slug).toBeUndefined()
+    expect(find('drafts.a')?.route?.slug?.current).toBe('launch-day')
+    expect(await runCustom('a')).toBe(false)
+
+    expect(await runCustom('b')).toBe(true)
+    expect(find('b')?.route?.slug?.current).toBe('launch-day-2')
+  })
+
+  test('syncs a handle to the routing slug and refuses one another path owns', async () => {
+    dataset.push(
+      {
+        _id: 'a',
+        _type: 'article',
+        headline: 'A',
+        route: {slug: {current: 'a'}},
+        seo: {url: {current: 'news'}},
+      },
+      {_id: 'b', _type: 'article', headline: 'B', legacySlug: {current: 'taken'}},
+      {_id: 'c', _type: 'article', headline: 'C', seo: {url: {current: 'taken'}}},
+    )
+
+    await runCustom('a')
+    expect(find('a')?.route?.slug?.current).toBe('news')
+
+    // `b` routes on its legacy slug and has no handle: left alone, never invoked.
+    expect(await runCustom('b')).toBe(false)
+
+    await runCustom('c')
+    expect(find('c')?.route?.slug).toBeUndefined()
+  })
+})

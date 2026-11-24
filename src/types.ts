@@ -35,6 +35,13 @@ export interface SearchListingPluginOptions {
    */
   siteName?: string
   /**
+   * The site's own URL, such as `'https://acme.com'`, shown before the path in the listing
+   * preview and under the URL handle. A trailing slash is fine; anything other than an absolute
+   * http(s) URL is ignored with a warning. Falls back to the Studio's own origin when omitted.
+   * A field's own `siteUrl` option overrides it.
+   */
+  siteUrl?: string
+  /**
    * Fallbacks for every `seo` field, tried after the field's own `fallbacks`. Use it for
    * site-wide defaults, such as a sharing image set in a settings document.
    */
@@ -64,6 +71,11 @@ export type SearchListingValue = {
 export interface SearchListingFieldOptions {
   /** The route the document lives under, shown before the URL handle. Defaults to `/`. */
   pathPrefix?: string
+  /**
+   * The site URL for this field, overriding the plugin's `siteUrl`: for schemas that serve
+   * several sites, such as `'https://shop.acme.com'`.
+   */
+  siteUrl?: string
   /**
    * Set to `false` for a document with a fixed URL, such as a landing page singleton. The
    * preview then shows `pathPrefix` as the whole path and the URL handle field is removed.

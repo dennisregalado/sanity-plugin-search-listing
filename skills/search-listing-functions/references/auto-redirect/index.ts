@@ -3,7 +3,7 @@ import { documentEventHandler } from '@sanity/functions';
 import { syncRedirects } from 'sanity-plugin-search-listing/functions';
 
 /**
- * The route of each type routed by `slug.current`. EDIT for the project: match each type's
+ * The route of each type routed by its slug (`slug.current` by default). EDIT for the project: match each type's
  * `pathPrefix` and the types passed to `autoRedirectEvent` in the Blueprint.
  */
 const ROUTE_PREFIXES = {

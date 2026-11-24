@@ -116,7 +116,7 @@ export function getSlugSourceText(
 ): string {
   if (!document) return ''
   for (const path of getSourcePaths(options)) {
-    const text = toPlainText(getPath(document, path))
+    const text = toPlainText(getPathValue(document, path))
     if (text) return text
   }
   return ''
@@ -233,12 +233,12 @@ export function isSlugTaken(
 function getOwnedSlugs(document: SlugDocument, options?: SlugOptions): string[] {
   return [
     getSlugCurrent(document.seo?.url),
-    ...getCurrentPaths(options).map((path) => getSlugCurrent(getPath(document, path))),
+    ...getCurrentPaths(options).map((path) => getSlugCurrent(getPathValue(document, path))),
   ].filter(Boolean)
 }
 
-/** `store.slug` on a plain object. */
-function getPath(document: unknown, path: string): unknown {
+/** `store.slug.current` on a plain object. Arrays are indexed by number: `images.0`. */
+export function getPathValue(document: unknown, path: string): unknown {
   let value: unknown = document
   for (const key of path.split('.')) {
     if (!value || typeof value !== 'object') return undefined

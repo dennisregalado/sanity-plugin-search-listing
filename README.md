@@ -27,7 +27,7 @@ Most projects need the same SEO fields on pages, products, posts, collections, a
 
 **vs. a highly configurable SEO plugin**
 
-- Two plugin options: `siteName` and `fallbacks`.
+- Four plugin options: `siteName`, `siteUrl`, `fallbacks` and `duplicate`.
 - No project-specific routes, document types, or frontend assumptions.
 - The stored value stays plain Sanity data that your frontend can query however it wants.
 
@@ -72,45 +72,49 @@ export default defineConfig({
     // After structureTool(): it adds the Duplicate action this plugin wraps.
     searchListing({
       siteName: 'Your Site Name',
+      siteUrl: 'https://example.com',
     }),
   ],
 })
 ```
 
-### Duplicating documents
+### Plugin options
 
-Duplicating a document that has an `seo` field appends " Copy" to its title and leaves out its URL handle (`seo.url`) and routing `slug`, so the copy never claims the original's URL. Its URL follows from the new title, and [`auto-slug`](#persisting-the-slug) saves it when the copy is published. Everything else is copied.
+| Option      | What it does                                                                                                            |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `siteName`  | The site name above the listing. Defaults to the workspace title.                                                       |
+| `siteUrl`   | The site's URL (`'https://example.com'`), shown in the listing, under the URL handle and in the home title placeholder. |
+| `fallbacks` | Site-wide fallbacks, tried after each field's own. See [Fallbacks](#fallbacks).                                         |
+| `duplicate` | The Duplicate action's URL guard. See [Duplicating documents](#duplicating-documents).                                  |
 
-| Duplicate       | Title         | URL               |
-| --------------- | ------------- | ----------------- |
-| Homepage        | Homepage Copy | `homepage-copy`   |
-| Homepage, again | Homepage Copy | `homepage-copy-2` |
-| Homepage Copy   | Homepage Copy | `homepage-copy-3` |
+Without `siteUrl`, the listing shows the Studio's own host (localhost, `*.sanity.studio`). A trailing slash, query or hash is dropped; a value that is not an absolute http(s) URL is ignored with a console warning. A field's own `siteUrl` option wins over the plugin's.
 
-A title that already ends in " Copy" is left alone. The suffix goes on `title`, or on `name` for types without one.
+### Adding the field
 
-Register the plugin after `structureTool()`. Listed before it, the plugin cannot see the Duplicate action and logs a warning in the browser console. To keep the Studio's own Duplicate, pass `duplicate: false`. If your routing slug field is not called `slug`, name it: `duplicate: {omit: ['path']}`. Change or drop the title suffix with `duplicate: {titleSuffix: ' (copy)'}` or `titleSuffix: false`.
-
-Use the `seo` type anywhere in your schema:
+Use the `seo` type anywhere in your schema, with the route the document lives under:
 
 ```ts
 import {defineField, defineType} from 'sanity'
 
-export const page = defineType({
-  name: 'page',
-  title: 'Page',
+export const product = defineType({
+  name: 'product',
+  title: 'Product',
   type: 'document',
   fields: [
     defineField({
       name: 'seo',
       title: 'Search engine listing',
       type: 'seo',
-      options: {
-        pathPrefix: '/',
-      },
+      options: {pathPrefix: '/products/'},
     }),
   ],
 })
+
+// A landing page always at /makers: no URL handle field
+options: {pathPrefix: '/makers', handle: false}
+
+// The settings document holding the site's own listing
+options: {home: true}
 ```
 
 ### Field options
@@ -120,12 +124,25 @@ Set these as `options` on each `seo` field:
 | Option          | What it does                                                                                                                                                                                    |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pathPrefix`    | The route shown before the URL handle, e.g. `'/products/'`. Default `/`.                                                                                                                        |
-| `handle: false` | A document at a fixed URL: no URL handle field; the preview shows `pathPrefix`.                                                                                                                 |
+| `handle: false` | A document at a fixed URL: no URL handle field; the preview shows `pathPrefix` as the whole path.                                                                                               |
 | `home: true`    | The site's own listing, on a settings or home page document: no URL handle, the preview shows the host, the description may run to 320 characters, and the title field reads "Home page title". |
+| `siteUrl`       | This field's site URL, overriding the plugin's `siteUrl`, for schemas that serve several sites (`'https://shop.example.com'`).                                                                  |
 | `fallbacks`     | What the listing shows while a field is empty. See [Fallbacks](#fallbacks).                                                                                                                     |
 | `maxLength`     | `{title, description}` lengths past which the listing warns. Default `{title: 70, description: 160}` (320 with `home`).                                                                         |
 | `slug`          | Where the URL comes from when there is no handle: `{source, current}` as dot paths. Default `{source: ['title', 'name'], current: ['slug']}`.                                                   |
-| `preview.price` | A price under the description: a path to a number, or `{path, currency}` (default `USD`).                                                                                                       |
+| `preview.price` | A price under the description: a path to a number, or `{path, currency}` (default `USD`), formatted in the Studio's locale (`$1,299.00`).                                                       |
+
+Options also work on a named subtype, so several types can share them. A field's own options are merged on top, shallowly (a field that sets `fallbacks` replaces the subtype's `fallbacks`):
+
+```ts
+defineType({
+  name: 'productSeo',
+  type: 'seo',
+  options: {pathPrefix: '/products/', ...shopifyProduct},
+})
+```
+
+An `seo` field inside an object or array gets its own options too, in the preview and in validation.
 
 #### Presets: Sanity Connect for Shopify
 
@@ -144,48 +161,30 @@ defineField({
 
 `shopifyProduct` sets the title, description and image fallbacks, `slug: {source: ['store.title'], current: ['store.slug']}` and the price line; `shopifyCollection` the same without a price and with `store.imageUrl`. To change one part, spread it too: `fallbacks: {...shopifyProduct.fallbacks, image: 'mainImage'}`.
 
-Set `options.pathPrefix` on each schema field when a document type needs a route prefix in the preview:
+## Editing
 
-```ts
-defineField({
-  name: 'seo',
-  title: 'Search engine listing',
-  type: 'seo',
-  group: 'seo',
-  options: {
-    pathPrefix: '/products/',
-  },
-})
-```
+The listing shows the preview; the fields behind it open with **Edit** in its header (**Done** closes them). Edit mode also opens when focus moves to a hidden field (a click in the validation panel, a link, presence), and once on its own when a hidden field gets an error. While it is closed, the toggle takes the colour of the hidden fields' most severe warning or error and lists them in its tooltip.
 
-Common storefront patterns:
+Focusing an empty title, description or URL handle selects its fallback, so typing replaces it; the arrow and End keys keep it.
 
-```ts
-// page
-options: {
-  pathPrefix: '/'
-}
+### URL handle
 
-// product
-options: {
-  pathPrefix: '/products/'
-}
+- **Reset** sets the handle back to the URL generated from the title (numbered past other documents, like the preview). It shows when a handle is set and differs from that URL.
+- When the document is published at an explicit URL (a handle or routing slug) and the handle now differs, a note says so: "Published at /pages/about-us. Changing the handle moves the page; links to the old URL need a redirect." [`auto-redirect`](#sanity-functions) writes that redirect.
 
-// collection
-options: {
-  pathPrefix: '/collections/'
-}
-```
+## Duplicating documents
 
-Set `options.handle` to `false` on a document that lives at one fixed URL, such as a landing page singleton. The preview shows `pathPrefix` as the whole path and the URL handle field is removed:
+Duplicating a document that has an `seo` field appends " Copy" to its title and leaves out its URL handle (`seo.url`) and routing `slug`, so the copy never claims the original's URL. Its URL follows from the new title, and [`auto-slug`](#persisting-the-slug) saves it when the copy is published. Everything else is copied.
 
-```ts
-// makers landing page, always at /makers
-options: {
-  pathPrefix: '/makers',
-  handle: false
-}
-```
+| Duplicate       | Title         | URL               |
+| --------------- | ------------- | ----------------- |
+| Homepage        | Homepage Copy | `homepage-copy`   |
+| Homepage, again | Homepage Copy | `homepage-copy-2` |
+| Homepage Copy   | Homepage Copy | `homepage-copy-3` |
+
+A title that already ends in " Copy" is left alone. The suffix goes on `title`, or on `name` for types without one.
+
+Register the plugin after `structureTool()`. Listed before it, the plugin cannot see the Duplicate action and logs a warning in the browser console. To keep the Studio's own Duplicate, pass `duplicate: false`. If your routing slug field is not called `slug`, name it: `duplicate: {omit: ['path']}`. Change or drop the title suffix with `duplicate: {titleSuffix: ' (copy)'}` or `titleSuffix: false`.
 
 ## Fallbacks
 
@@ -229,7 +228,7 @@ options: {fallbacks: {title: [...defaultFallbacks.title, 'headline'], descriptio
 
 For Shopify documents use the [Sanity Connect presets](#presets-sanity-connect-for-shopify).
 
-While the image is empty and the listing is not in edit mode, its fallback is shown in the image field: a Sanity image through the image input itself (nothing is saved), any other image URL in a box like the input's preview. Hovering it names the source: a fallback from another document (a query such as `*[_type == "settings"][0].seo.image`) opens a popover with that document's preview, linking to the field; one read from the document itself names the field. A title or description fallback is the field's placeholder, clipped to its `maxLength`; the character count only counts what is typed.
+While the image is empty and the listing is not in edit mode, its fallback is shown in the image field: a Sanity image through the image input itself (nothing is saved until Upload or Select replaces it), any other image URL in a box like the input's preview. Hovering it names the source: a fallback from another document (a query such as `*[_type == "settings"][0].seo.image`) opens a popover with that document's preview, linking to the field (from the keyboard too); one read from the document itself names the field. A title or description fallback is the field's placeholder, clipped to its `maxLength`; the character count only counts what is typed.
 
 An image fallback can be a Sanity image object, an image asset, or an image URL.
 
@@ -323,7 +322,7 @@ Using this entry keeps the saved slug identical to the one the editor was shown.
 - Documents with the same derived slug take `base`, `base-2`, `base-3`, and so on, in `_createdAt` order, skipping any slug another document already owns.
 - The draft and published copies of a document count as one document. Release versions are ignored.
 
-The entry also exports `slugify`, `isValidUrlHandle`, `isSlugTaken`, `getDocumentSlug`, `getTitleSlug` and `prepareDuplicate` / `omitUrlHandle` (the duplicate guard's mapping, for your own copy flows).
+The entry also exports `slugify`, `isValidUrlHandle`, `isSlugTaken`, `getDocumentSlug`, `getTitleSlug`, `getPathValue` (reads a dot path) and `prepareDuplicate` / `omitUrlHandle` (the duplicate guard's mapping, for your own copy flows).
 
 ### Sanity Functions
 
@@ -365,3 +364,53 @@ export const handler = documentEventHandler(async ({context, event}) => {
 ```
 
 `auto-redirect` is the same with `syncRedirects(client, {page: '/pages/', post: '/blog/'}, event.data)` and `perspective: 'published'`. The `search-listing-functions` agent skill has the full setup, the redirect schema and the frontend lookup.
+
+When the `seo` fields set a `slug` option, pass the same value to all three: `autoSlugEvent(types, slug)`, `autoRedirectEvent(types, slug)` and `syncSlug(client, event.data, slug)`. The first `current` path is the routing slug the Functions write and watch:
+
+```ts
+const SLUG = {source: ['title', 'name'], current: ['path']} // routes on path.current
+autoSlugEvent(SLUG_TYPES, SLUG)
+```
+
+The Functions read the document's top-level `seo` field.
+
+## Translations
+
+The plugin's Studio UI goes through Sanity's i18n, in the `search-listing` namespace (`searchListingLocaleNamespace`), with US English built in (`searchListingUsEnglishLocaleBundle`). To translate it, add a bundle for a locale your Studio has (from a `@sanity/locale-*` package or `i18n.locales`). Missing keys fall back to English:
+
+```ts
+import {defineConfig, defineLocaleResourceBundle} from 'sanity'
+import {
+  searchListingLocaleNamespace,
+  type SearchListingLocaleResourceKeys,
+} from 'sanity-plugin-search-listing'
+
+const norwegian: Partial<Record<SearchListingLocaleResourceKeys, string>> = {
+  'edit-toggle.edit': 'Rediger',
+  'edit-toggle.done': 'Ferdig',
+  'preview.untitled': 'Uten tittel',
+  'field.characters-used': '{{count}} av {{max}} tegn brukt',
+  // …
+}
+
+export default defineConfig({
+  // …
+  i18n: {
+    bundles: [
+      defineLocaleResourceBundle({
+        locale: 'nb-NO',
+        namespace: searchListingLocaleNamespace,
+        resources: norwegian, // or () => import('./search-listing.nb-NO')
+      }),
+    ],
+  },
+})
+```
+
+`SearchListingLocaleResourceKeys` lists every key; the English strings and what each one is for are in [`src/i18n/resources.ts`](https://github.com/dennisregalado/sanity-plugin-search-listing/blob/main/src/i18n/resources.ts). Validation messages are translated too. Field titles in the schema stay English (Sanity 6 cannot translate them), but the plugin's own labels for the title, description and URL handle fields are translated. Console warnings and the duplicate's " Copy" suffix are not translated.
+
+## Development
+
+`dev/` has a workbench Studio running the plugin from `src/` against a mocked Content Lake, for checking and screenshotting UI changes without a Sanity project (`npm run dev:studio`, `npm run screenshot`). See [`dev/README.md`](dev/README.md). Before a pull request, run `npm run lint && npm run typecheck && npm test && npm run build`.
+
+Changes are listed in [CHANGELOG.md](CHANGELOG.md).
